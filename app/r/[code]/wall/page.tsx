@@ -21,7 +21,7 @@ import PhotoCard from "@/components/PhotoCard";
 import NoteCard from "@/components/NoteCard";
 import PollCard from "@/components/PollCard";
 import StoryStrip from "@/components/StoryStrip";
-import ComposerModal from "@/components/ComposerModal";
+import ComposerModal, { ComposerMode } from "@/components/ComposerModal";
 import VibeCardModal from "@/components/VibeCardModal";
 import { Icon } from "@/components/icons";
 
@@ -52,16 +52,21 @@ export default function LiveSocialWallPage() {
    * the shared sign-in prompt so protected requests never hit the API
    * while unauthenticated.
    */
-  const guardAction = useCallback(async (action: () => void | Promise<void>) => {
-    if (!auth.isReady) return false;
-    if (auth.isAuthenticated) {
-      await action();
-      return true;
-    }
-    pendingActionRef.current = action;
-    setIsAuthModalOpen(true);
-    return false;
-  }, [auth.isReady, auth.isAuthenticated]);
+  const guardAction = useCallback(
+    async (
+      action: () => void | Promise<void> | boolean | Promise<boolean>
+    ): Promise<boolean> => {
+      if (!auth.isReady) return false;
+      if (auth.isAuthenticated) {
+        await action();
+        return true;
+      }
+      pendingActionRef.current = action as () => void | Promise<void>;
+      setIsAuthModalOpen(true);
+      return false;
+    },
+    [auth.isReady, auth.isAuthenticated]
+  );
 
   // Resumes the pending action after successful Google sign-in.
   const handleAuthModalAuthenticated = useCallback(async () => {
@@ -76,8 +81,17 @@ export default function LiveSocialWallPage() {
   // Floating Composer & Modal states
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [composerDefaultTab, setComposerDefaultTab] = useState<"photo" | "note">("photo");
+  const [composerMode, setComposerMode] = useState<ComposerMode>("standard");
+  const [storyEntryId, setStoryEntryId] = useState<string | null>(null);
   const [photoCooldownRemaining, setPhotoCooldownRemaining] = useState(0);
   const [noteCooldownRemaining, setNoteCooldownRemaining] = useState(0);
+
+  // Reset composer session state (mode + story target) when closing.
+  const resetComposer = () => {
+    setIsComposerOpen(false);
+    setComposerMode("standard");
+    setStoryEntryId(null);
+  };
 
   // VibeCard Modal state
   const [selectedPostForVibeCard, setSelectedPostForVibeCard] = useState<PostDTO | null>(null);
@@ -262,15 +276,41 @@ export default function LiveSocialWallPage() {
 
   const handleSubmitPhoto = async (data: {
     file: File;
-    frameId: string;
     authorName: string;
+    mode: ComposerMode;
+    frameId?: string;
+    storyId?: string;
   }): Promise<boolean> => {
     return guardAction(async () => {
+      if (data.mode === "story-entry") {
+        // Chain Story entry — never calls api.createPost().
+        const storyId = data.storyId ?? storyEntryId;
+        if (!storyId) {
+          // The Chain Story is unavailable — do not send an invalid request.
+          throw new Error("The Chain Story is no longer available. Try again from the wall.");
+        }
+        const uploadRes = await api.uploadPhoto(data.file);
+        const res = await api.addStoryEntry(storyId, {
+          image_url: uploadRes.image_url,
+          cloudinary_public_id: uploadRes.cloudinary_public_id,
+          author_name: data.authorName || "FestSquad",
+        });
+        // Update the active story with the new entry (existing state conventions).
+        setFeed((prev) => {
+          const story = prev.active_story;
+          if (!story || story.id !== storyId) return prev;
+          const entries = [...story.entries, res.entry];
+          return { ...prev, active_story: { ...story, entries } };
+        });
+        return true;
+      }
+
+      // Standard feed photo upload (unchanged behavior).
       const uploadRes = await api.uploadPhoto(data.file);
       const postRes = await api.createPost(roomCode, {
         image_url: uploadRes.image_url,
         cloudinary_public_id: uploadRes.cloudinary_public_id,
-        frame_id: data.frameId,
+        frame_id: data.frameId || "classic",
         author_name: data.authorName,
       });
       setFeed((prev) => ({
@@ -278,6 +318,7 @@ export default function LiveSocialWallPage() {
         posts: [postRes.post, ...prev.posts.filter((p) => p.id !== postRes.post.id)],
       }));
       setPhotoCooldownRemaining(20);
+      return true;
     });
   };
 
@@ -397,6 +438,9 @@ export default function LiveSocialWallPage() {
               roomCode={roomCode}
               onAddEntry={() => {
                 void guardAction(() => {
+                  if (!feed.active_story) return;
+                  setComposerMode("story-entry");
+                  setStoryEntryId(feed.active_story.id);
                   setComposerDefaultTab("photo");
                   setIsComposerOpen(true);
                 });
@@ -492,6 +536,8 @@ export default function LiveSocialWallPage() {
             <button
               onClick={() => {
                 void guardAction(() => {
+                  setComposerMode("standard");
+                  setStoryEntryId(null);
                   setComposerDefaultTab("photo");
                   setIsComposerOpen(true);
                 });
@@ -506,6 +552,8 @@ export default function LiveSocialWallPage() {
             <button
               onClick={() => {
                 void guardAction(() => {
+                  setComposerMode("standard");
+                  setStoryEntryId(null);
                   setComposerDefaultTab("note");
                   setIsComposerOpen(true);
                 });
@@ -522,7 +570,9 @@ export default function LiveSocialWallPage() {
         {/* Floating Composer Modal */}
         <ComposerModal
           isOpen={isComposerOpen}
-          onClose={() => setIsComposerOpen(false)}
+          onClose={resetComposer}
+          mode={composerMode}
+          storyId={storyEntryId || undefined}
           defaultTab={composerDefaultTab}
           onSubmitPhoto={handleSubmitPhoto}
           onSubmitNote={handleSubmitNote}

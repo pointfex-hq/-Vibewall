@@ -216,6 +216,72 @@ async function runUITests() {
       logResult("Poll Vote While Authenticated Skips Auth Modal", !(await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible()));
     }
 
+    // Chain Story — StoryStrip → Add Photo uploads to the active story (not the feed)
+    const getStoryId = () =>
+      page.evaluate(() => {
+        const store = globalThis[Symbol.for("vibewall.mock.store")];
+        const story = [...(store?.stories?.values() || [])].find((s) => s.is_active);
+        return story ? story.id : null;
+      });
+    const getStoryEntries = (sid) =>
+      page.evaluate((storyId) => {
+        const store = globalThis[Symbol.for("vibewall.mock.store")];
+        const story = [...(store?.stories?.values() || [])].find((s) => s.id === storyId);
+        return story ? story.entries.length : -1;
+      }, sid);
+    const getPostCount = () => page.evaluate(() => globalThis[Symbol.for("vibewall.mock.store")]?.posts?.size || 0);
+
+    const storyId = await getStoryId();
+    const storyEntriesBefore = storyId ? await getStoryEntries(storyId) : -1;
+    const postsBeforeStoryUpload = await getPostCount();
+
+    const addPhotoBtn = page.locator("text=Add Photo").first();
+    if (storyId && (await addPhotoBtn.isVisible())) {
+      await addPhotoBtn.click();
+      await page.waitForTimeout(1000);
+      logResult("Story Add Photo Opens Composer", await page.locator("text=Add to Chain Story").isVisible());
+      logResult("Story Entry Mode Hides Frame Selector", !(await page.locator("text=Choose Frame Style").isVisible()));
+      const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1;
+        canvas.height = 1;
+        return canvas.toDataURL("image/png");
+      });
+      await page.setInputFiles("input[type=file]", {
+        name: "story-photo.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(png.split(",")[1], "base64"),
+      });
+      await page.locator("img[alt='Upload preview']").waitFor({ state: "visible", timeout: 8000 });
+      await page.click("button:has-text('Add to Chain Story')");
+      await page.waitForTimeout(1500);
+      const storyEntriesAfter = await getStoryEntries(storyId);
+      logResult("Story Upload Adds Entry To Chain Story", storyEntriesAfter === storyEntriesBefore + 1, `before=${storyEntriesBefore} after=${storyEntriesAfter}`);
+      logResult("Story Upload Does Not Post To Feed", (await getPostCount()) === postsBeforeStoryUpload);
+    }
+
+    // Standard Add Photo (bottom bar) still posts to the feed via api.createPost
+    const postsBeforeStandard = await getPostCount();
+    await page.click("button:has-text('Post Photo')");
+    await page.locator("text=Post Photo to Live Wall").waitFor({ state: "visible", timeout: 8000 });
+    const png2 = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      return canvas.toDataURL("image/png");
+    });
+    await page.setInputFiles("input[type=file]", {
+      name: "standard-photo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(png2.split(",")[1], "base64"),
+    });
+    await page.locator("img[alt='Upload preview']").waitFor({ state: "visible", timeout: 8000 });
+    logResult("Standard Mode Shows Frame Selector", await page.locator("text=Choose Frame Style").isVisible());
+    await page.click("button:has-text('Post Photo to Live Wall')");
+    await page.waitForTimeout(1500);
+    const postsAfterStandard = await getPostCount();
+    logResult("Standard Add Photo Still Posts To Feed", postsAfterStandard > postsBeforeStandard, `before=${postsBeforeStandard} after=${postsAfterStandard}`);
+
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "3-live-wall-full.png") });
 
     // ----------------------------------------------------
@@ -223,7 +289,12 @@ async function runUITests() {
     // ----------------------------------------------------
     console.log("\n>>> Testing Route 4: Chain Story Viewer (/r/VIBE26/story/story-fest-1)");
     await page.goto(`${BASE_URL}/r/VIBE26/story/story-fest-1`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(800);
+    // Wait for the story stage to finish loading.
+    await page.waitForFunction(
+      () => document.body.innerText.includes("Add Your Photo to this Chain Story"),
+      null,
+      { timeout: 8000 }
+    );
 
     // Verify 9:16 Fullscreen Immersive Stage
     const authorHeader = await page.locator("span:has-text('Murad FestCrew'), span:has-text('FestCrew'), span:has-text('Fest')").first().isVisible();

@@ -5,12 +5,23 @@ import Image from "next/image";
 import { validateAndCompressImage, CompressionResult } from "@/lib/upload/compress";
 import { Icon } from "@/components/icons";
 
+export type ComposerMode = "standard" | "story-entry";
+
 interface ComposerModalProps {
   isOpen: boolean;
   onClose: () => void;
   /** Returns false when the action is blocked by the auth guard. */
-  onSubmitPhoto: (data: { file: File; frameId: string; authorName: string }) => Promise<boolean | void>;
+  onSubmitPhoto: (data: {
+    file: File;
+    authorName: string;
+    mode: ComposerMode;
+    frameId?: string;
+    storyId?: string;
+  }) => Promise<boolean | void>;
   onSubmitNote: (data: { body: string; authorName: string }) => Promise<boolean | void>;
+  /** `story-entry` mode hides frame selection and submits via `api.addStoryEntry`. */
+  mode?: ComposerMode;
+  storyId?: string;
   defaultTab?: "photo" | "note";
   photoCooldownRemaining?: number;
   noteCooldownRemaining?: number;
@@ -21,6 +32,8 @@ export default function ComposerModal({
   onClose,
   onSubmitPhoto,
   onSubmitNote,
+  mode = "standard",
+  storyId,
   defaultTab = "photo",
   photoCooldownRemaining = 0,
   noteCooldownRemaining = 0,
@@ -45,6 +58,18 @@ export default function ComposerModal({
   const [noteAuthor, setNoteAuthor] = useState("");
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Reset transient photo state when the composer closes so a previous
+  // selection (frame, file) can never leak into a new session.
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedFile(null);
+      setPreviewResult(null);
+      setSelectedFrame("classic");
+      setPhotoAuthor("");
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -72,10 +97,17 @@ export default function ComposerModal({
     setErrorMessage(null);
     setIsUploadingPhoto(true);
     try {
+      if (mode === "story-entry" && !storyId) {
+        // The Chain Story is unavailable — do not send an invalid request.
+        setErrorMessage("The Chain Story is no longer available. Try again from the wall.");
+        return;
+      }
       const ok = await onSubmitPhoto({
         file: selectedFile,
-        frameId: selectedFrame,
         authorName: photoAuthor.trim() || "VibeGuest",
+        mode,
+        frameId: selectedFrame,
+        storyId,
       });
       if (ok === false) {
         // Blocked by the auth guard — keep the composer open for retry.
@@ -235,28 +267,30 @@ export default function ComposerModal({
                     </div>
                   </div>
 
-                  {/* Frame Selector */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                      Choose Frame Style
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {frames.map((frame) => (
-                        <button
-                          type="button"
-                          key={frame.id}
-                          onClick={() => setSelectedFrame(frame.id)}
-                          className={`p-2 rounded-xl text-xs font-semibold border text-center transition-all ${
-                            selectedFrame === frame.id
-                              ? `bg-primary/20 text-primary border-primary ${frame.color}`
-                              : "border-outline/40 text-on-surface-variant hover:text-on-surface"
-                          }`}
-                        >
-                          {frame.name}
-                        </button>
-                      ))}
+                  {/* Frame Selector — hidden in story-entry mode */}
+                  {mode !== "story-entry" && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="font-heading font-semibold text-xs text-on-surface-variant">
+                        Choose Frame Style
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {frames.map((frame) => (
+                          <button
+                            type="button"
+                            key={frame.id}
+                            onClick={() => setSelectedFrame(frame.id)}
+                            className={`p-2 rounded-xl text-xs font-semibold border text-center transition-all ${
+                              selectedFrame === frame.id
+                                ? `bg-primary/20 text-primary border-primary ${frame.color}`
+                                : "border-outline/40 text-on-surface-variant hover:text-on-surface"
+                            }`}
+                          >
+                            {frame.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -284,7 +318,12 @@ export default function ComposerModal({
                 {isUploadingPhoto ? (
                   <>
                     <Icon name="progress_activity" size={18} className="animate-spin" />
-                    <span>Posting to live wall...</span>
+                    <span>{mode === "story-entry" ? "Adding entry..." : "Posting to live wall..."}</span>
+                  </>
+                ) : mode === "story-entry" ? (
+                  <>
+                    <Icon name="add_a_photo" size={18} />
+                    <span>Add to Chain Story</span>
                   </>
                 ) : photoCooldownRemaining > 0 ? (
                   <span>Cooldown: wait {photoCooldownRemaining}s</span>

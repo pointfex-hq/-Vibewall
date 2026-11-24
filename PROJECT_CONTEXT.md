@@ -122,6 +122,7 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | Mock API Error Contract | IMPLEMENTED | `app/api/[...path]/route.ts` | VERIFIED |
 | Live Wall Interactive Auth Guards | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Shared Auth Required Modal | IMPLEMENTED | `components/auth/AuthRequiredModal.tsx` | VERIFIED |
+| Chain Story Upload Routing | IMPLEMENTED | `app/r/[code]/wall/page.tsx`, `components/ComposerModal.tsx` | VERIFIED |
 | Offline Icons (Lucide) | IMPLEMENTED | `components/icons.tsx` (new), 13 app/component files, `app/layout.tsx`, `app/globals.css` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
 | Vibe Notes & Pinning | IMPLEMENTED | `components/NoteCard.tsx` | VERIFIED |
@@ -476,5 +477,44 @@ Results: **lucide SVGs render on all routes (wall: 36, entry: 7)**; **zero reque
 ### 18.4 Files Modified
 
 - `components/icons.tsx` (new), 13 app/component files (icon replacements), `app/layout.tsx`, `app/globals.css`, `PROJECT_CONTEXT.md` — Section 18 + tracker row "Offline Icons (Lucide)".
+
+Remaining issues: none.
+
+---
+
+## 19. Chain Story Photo Upload Routing Fix (Target: `app/r/[code]/wall/page.tsx`)
+
+**Root cause:** Clicking **Add Photo** in `StoryStrip` opened the wall's `ComposerModal` in standard photo mode; submission called `api.createPost(roomCode, ...)`, creating a feed post instead of a Chain Story entry.
+
+### 19.1 Implemented behavior
+
+- `StoryStrip.onAddEntry` → wall `guardAction(() => { if (!feed.active_story) return; setComposerMode("story-entry"); setStoryEntryId(feed.active_story.id); setComposerDefaultTab("photo"); setIsComposerOpen(true); })`.
+- `ComposerModal` gets new props: `mode: "standard" | "story-entry"` (type `ComposerMode`) + `storyId?: string`; `onSubmitPhoto` now receives `{ file, authorName, mode, frameId?, storyId? }`.
+- **Story-entry mode:**
+  - Frame selector hidden (standard mode unchanged).
+  - Submit calls `api.addStoryEntry(storyId, { image_url, cloudinary_public_id, author_name })` — never `api.createPost()`.
+  - Standard Add Photo triggers (bottom-bar buttons, ComposerModal tab) still use `api.createPost()` with `frame_id`.
+  - Submit button shows "Add to Chain Story"; upload shows "Adding entry...".
+  - If the story ID is unavailable at submit → error message shown; no API request is sent.
+- Wall `handleSubmitPhoto` branches on `data.mode === "story-entry"` → `api.addStoryEntry` → `setFeed(prev => ({ ...prev, active_story: { ...story, entries: [...entries, res.entry] } }))` (same state-update conventions as the realtime handlers).
+- State resets on composer close (`resetComposer`) and `ComposerModal`'s close-effect resets `selectedFile`/`previewResult`/`selectedFrame`/`photoAuthor`, so no frame or file leaks between modes.
+- Auth guards unchanged: story uploads are behind `guardAction` (Section 14).
+
+### 19.2 Testing
+
+E2E suite `tests/e2e-ui-test.mjs` — new Suite 3 assertions (all executed, results recorded below):
+- StoryStrip → "Add Photo" → composer opens with "Add to Chain Story" (`Story Add Photo Opens Composer`).
+- Frame selector hidden in story-entry mode (`Story Entry Mode Hides Frame Selector`).
+- Upload via `page.setInputFiles` → `Story Upload Adds Entry To Chain Story (before=3 after=4)` (mock store check).
+- Story upload does not post to the feed (`Story Upload Does Not Post To Feed`).
+- Standard mode: frame selector visible after file upload, standard upload still posts to feed (`Standard Mode Shows Frame Selector`, `Standard Add Photo Still Posts To Feed (before=4 after=5)`).
+- Suite 4 waits updated for the story viewer (`Story Author Header Telemetry`, `Multi-segment Progress Bars (3 segments)`, `Add Photo to Story CTA Visible`).
+
+### 19.3 Files Modified
+
+- `app/r/[code]/wall/page.tsx` — composer mode state, `handleSubmitPhoto` story branch, StoryStrip `onAddEntry`, ComposerModal render props, `resetComposer`.
+- `components/ComposerModal.tsx` — `ComposerMode` type + props, story-entry submit branch, frame-selector hiding, submit labels, close-reset effect.
+- `tests/e2e-ui-test.mjs` — new story upload tests + robust waits (all passing).
+- `PROJECT_CONTEXT.md` — Sections 18 + 19 + tracker rows.
 
 Remaining issues: none.
