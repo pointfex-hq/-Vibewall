@@ -3,6 +3,14 @@ import { mockDB } from "@/lib/mock-data";
 
 export const runtime = "nodejs";
 
+/**
+ * Shared mock-mode error response helper — matches Playbook v2.1 §8:
+ * `{ error: { code, message } }` with the same shape as the real backend.
+ */
+function errorResponse(status: number, code: string, message: string) {
+  return NextResponse.json({ error: { code, message } }, { status });
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -50,21 +58,21 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
     // 2. GET /api/rooms/[code]
     if (method === "GET" && path.length === 2 && path[0] === "rooms") {
       const room = mockDB.getRoom(path[1]);
-      if (!room) return NextResponse.json({ error: { message: "Room not found" } }, { status: 404 });
+      if (!room) return errorResponse(404, "VALIDATION_ERROR", "Room not found");
       return NextResponse.json({ room, is_owner: true, is_member: true });
     }
 
     // 3. POST /api/rooms/[code]/join
     if (method === "POST" && path.length === 3 && path[0] === "rooms" && path[2] === "join") {
       const room = mockDB.getRoom(path[1]);
-      if (!room) return NextResponse.json({ error: { message: "Room not found" } }, { status: 404 });
+      if (!room) return errorResponse(404, "VALIDATION_ERROR", "Room not found");
       return NextResponse.json({ joined: true, room });
     }
 
     // 4. PATCH /api/rooms/[code]
     if (method === "PATCH" && path.length === 2 && path[0] === "rooms") {
       const res = mockDB.updateRoom(path[1], body);
-      if (!res) return NextResponse.json({ error: { message: "Room not found" } }, { status: 404 });
+      if (!res) return errorResponse(404, "VALIDATION_ERROR", "Room not found");
       return NextResponse.json(res);
     }
 
@@ -78,7 +86,7 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
     // 6. GET /api/screen/[token]
     if (method === "GET" && path.length === 2 && path[0] === "screen") {
       const room = mockDB.getRoomByToken(path[1]);
-      if (!room) return NextResponse.json({ error: { message: "Invalid screen token" } }, { status: 404 });
+      if (!room) return errorResponse(404, "VALIDATION_ERROR", "Invalid screen token");
       const feed = mockDB.getFeed(room.code, false);
       return NextResponse.json({
         room,
@@ -153,10 +161,10 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
       });
     }
 
-    return NextResponse.json({ error: { message: "Route not found" } }, { status: 404 });
+    return errorResponse(404, "VALIDATION_ERROR", "Route not found");
   } catch (err: any) {
     return NextResponse.json(
-      { error: { message: err?.message || "Internal Error" } },
+      { error: { code: "INTERNAL_ERROR", message: err?.message || "Internal Error" } },
       { status: err?.status || 500 }
     );
   }

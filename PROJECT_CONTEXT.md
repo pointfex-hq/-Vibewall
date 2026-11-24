@@ -119,6 +119,7 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | Guest Entry & Google Auth Gate | IMPLEMENTED | `app/r/[code]/page.tsx`, `lib/auth.ts`, `lib/supabase.ts` | VERIFIED |
 | Live Social Wall | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Host Dashboard Realtime Sync | IMPLEMENTED | `app/host/[code]/page.tsx` | VERIFIED |
+| Mock API Error Contract | IMPLEMENTED | `app/api/[...path]/route.ts` | VERIFIED |
 | Live Wall Interactive Auth Guards | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Shared Auth Required Modal | IMPLEMENTED | `components/auth/AuthRequiredModal.tsx` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
@@ -247,9 +248,10 @@ Commands:
 
 ## 12. Current Development State
 
-- Status: All 6 routes, 4 themes, photo upload pipeline, HTML5 canvas VibeCard exporter, real-time sync, and mock fallback engine are built, verified, and running on `http://localhost:3000`.
-- Active server daemon: Next.js production server running on port 3000.
+- Status: All 6 routes, 4 themes, photo upload pipeline, HTML5 canvas VibeCard exporter, real-time sync (Live Wall, Venue Display, Host Dashboard), mock fallback engine, and the Guest-entry authentication flow are built, verified, and running on `http://localhost:3000`.
+- Active server daemon: Next.js dev server running on port 3000.
 - All application source files are in `code/`. Stitch design files in `stitch_vibewall/` are untouched.
+- Mock API error contract (Section 17) verified — mock-mode error responses include `error.code` + `error.message`.
 
 ---
 
@@ -394,3 +396,51 @@ Results (run against `http://localhost:3000`): **TOTAL: 12 — PASSED: 12 — FA
 - `PROJECT_CONTEXT.md` — Section 16 + tracker row "Host Dashboard Realtime Sync".
 
 Remaining issues: none new; see previous sections for known items.
+
+---
+
+## 17. Mock API Error Response Contract (Playbook v2.1 §8)
+
+**Target:** `app/api/[...path]/route.ts` — the Next.js App Router mock API route used when `NEXT_PUBLIC_USE_MOCK=true`.
+
+### 17.1 Root Cause
+
+Every mock-mode error response was `{ error: { message } }` without the required `error.code`, while `lib/api.ts` parses `err.code = errorJson?.error?.code || "REQUEST_FAILED"` — the contract was inconsistent with the real backend and consumers.
+
+### 17.2 Real Backend Conventions (`origin/alvi/backend`, inspected; not modified)
+
+- `fail(status, message, code = "VALIDATION_ERROR")` — default code is `VALIDATION_ERROR`.
+- Used codes: `UNAUTHORIZED` (401, "Sign in with Google"), `FORBIDDEN` (403, "Room access required"), `RATE_LIMITED` (429, "Action limit reached"), `ROOM_CLOSED` (409, "Room is closed"), `INTERNAL_ERROR` (catch-all, "Service unavailable").
+- Response shape: `Response.json({ error: { code, message } })`.
+
+### 17.3 Error-Code Mapping (mock route)
+
+| Mock failure | Status | `error.code` | Notes |
+|---|---|---|---|
+| `GET /api/rooms/[code]` — room not found | 404 | `VALIDATION_ERROR` | Backend parity: `fail(404, "Room not found")` (default code) |
+| `POST /api/rooms/[code]/join` — room not found | 404 | `VALIDATION_ERROR` | Backend parity |
+| `PATCH /api/rooms/[code]` — room not found | 404 | `VALIDATION_ERROR` | Backend parity |
+| `GET /api/screen/[token]` — invalid token | 404 | `VALIDATION_ERROR` | Message kept: "Invalid screen token" |
+| Unknown route | 404 | `VALIDATION_ERROR` | Backend parity: `fail(404, "Unknown API route")` |
+| Uncaught error | 500 | `INTERNAL_ERROR` | Backend parity |
+
+Note: the five Playbook codes (`RATE_LIMITED`, `UNAUTHORIZED`, `FORBIDDEN`, `ROOM_CLOSED`, `VALIDATION_ERROR`) are supported; the mock route does not itself have rate-limit/permission/closed-room paths (the real backend has `fail(401, "Sign in with Google", "UNAUTHORIZED")`, `fail(403, "Room access required", "FORBIDDEN")`, `fail(429, "Action limit reached", "RATE_LIMITED")`, `fail(409, "Room is closed", "ROOM_CLOSED")`) — codes are assigned from the actual failure condition, not generically.
+
+### 17.4 Implementation
+
+- `app/api/[...path]/route.ts` — new `errorResponse(status, code, message)` helper; all error returns now `{ error: { code, message } }`; catch-all returns `code: "INTERNAL_ERROR"`; HTTP statuses and messages preserved.
+- `lib/api.ts` — no changes needed; `err.code` is already parsed from `errorJson?.error?.code`.
+
+### 17.5 Testing
+
+Script: `verify-mock-api-errors.mjs` (fetch-based, against the local dev server, mock mode).
+Results (run against `http://localhost:3000`): **TOTAL: 21 — PASSED: 21 — FAILED: 0** — every error case returns the expected status and `error.code`/`error.message`; success responses (`GET /api/rooms/VIBE26`, `GET /api/rooms/VIBE26/feed`) unchanged (200).
+
+Known behavior: `GET /api/screen/bad-token` returns 200 because `mockDB.getRoomByToken` (lib/mock-data.ts) has a pre-existing fallback returning the default room for demo screens — the 404 path of the route returns `VALIDATION_ERROR`/"Invalid screen token" and is verified by code inspection.
+
+### 17.6 Files Modified
+
+- `app/api/[...path]/route.ts`
+- `PROJECT_CONTEXT.md` — Section 17 + tracker row "Mock API Error Contract"
+
+Remaining issues: none.
