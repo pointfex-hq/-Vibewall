@@ -13,7 +13,7 @@ import {
   StoryDTO,
 } from "@/types/vibewall";
 import { api } from "@/lib/api";
-import { subscribeToRoom } from "@/lib/supabase";
+import { subscribeToRoom, getAuthState } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
@@ -42,6 +42,20 @@ export default function LiveSocialWallPage() {
   const [activeTab, setActiveTab] = useState<"all" | "photos" | "notes">("all");
   const [copiedToast, setCopiedToast] = useState(false);
 
+  // Optimistic like state owned by the wall; cards derive display from props
+  // (authoritative values) + this map while a like is in flight.
+  const [optimisticLikes, setOptimisticLikes] = useState<
+    Record<string, { liked: boolean; count: number }>
+  >({});
+  const likeInFlightRef = useRef<Set<string>>(new Set());
+  const pollInFlightRef = useRef<Set<string>>(new Set());
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const showActionNotice = (msg: string) => {
+    setActionNotice(msg);
+    setTimeout(() => setActionNotice(null), 2500);
+  };
+
   // Authentication state + shared auth prompt guard
   const auth = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -58,8 +72,9 @@ export default function LiveSocialWallPage() {
     ): Promise<boolean> => {
       if (!auth.isReady) return false;
       if (auth.isAuthenticated) {
-        await action();
-        return true;
+        const result = await action();
+        // Propagate the action outcome (e.g. optimistic rollback signals) upward.
+        return typeof result === "boolean" ? result : true;
       }
       pendingActionRef.current = action as () => void | Promise<void>;
       setIsAuthModalOpen(true);
@@ -73,7 +88,8 @@ export default function LiveSocialWallPage() {
     const action = pendingActionRef.current;
     pendingActionRef.current = null;
     if (action) {
-      await action();
+      const result = await action();
+      return typeof result === "boolean" ? result : true;
     }
     return true;
   }, []);
@@ -225,16 +241,80 @@ export default function LiveSocialWallPage() {
     }
   };
 
+  // Get the authoritative base like state for a post or note.
+  const getLikeBase = (
+    targetType: "post" | "note",
+    targetId: string
+  ): { liked: boolean; count: number } => {
+    const findIn = (items: Array<PostDTO | NoteDTO>) =>
+      items.find((item) => item.id === targetId);
+    const base =
+      targetType === "post"
+        ? findIn(feed.posts)
+        : findIn([...feed.notes, ...feed.pinned_notes]);
+    return { liked: Boolean(base?.liked_by_me), count: base?.like_count || 0 };
+  };
+
+  // Shared optimistic like action used by photos and notes.
+  const runLikeAction = async (
+    targetType: "post" | "note",
+    targetId: string
+  ): Promise<boolean> => {
+    // Prevent duplicate requests while a like is in flight.
+    if (likeInFlightRef.current.has(targetId)) return false;
+    likeInFlightRef.current.add(targetId);
+
+    const base = getLikeBase(targetType, targetId);
+    const optimistic = {
+      liked: !base.liked,
+      count: base.liked ? Math.max(0, base.count - 1) : base.count + 1,
+    };
+    setOptimisticLikes((prev) => ({ ...prev, [targetId]: optimistic }));
+
+    try {
+      const res = await api.toggleLike(targetType, targetId);
+      // Reconcile with the authoritative response and update the feed.
+      setOptimisticLikes((prev) => {
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
+      });
+      setFeed((prev) => ({
+        ...prev,
+        posts:
+          targetType === "post"
+            ? prev.posts.map((p) =>
+                p.id === targetId ? { ...p, liked_by_me: res.liked, like_count: res.like_count } : p
+              )
+            : prev.posts,
+        pinned_notes: prev.pinned_notes.map((n) =>
+          n.id === targetId ? { ...n, liked_by_me: res.liked, like_count: res.like_count } : n
+        ),
+        notes: prev.notes.map((n) =>
+          n.id === targetId ? { ...n, liked_by_me: res.liked, like_count: res.like_count } : n
+        ),
+      }));
+      return true;
+    } catch (err: any) {
+      // Roll back the optimistic like; the cards fall back to authoritative props.
+      setOptimisticLikes((prev) => {
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
+      });
+      showActionNotice(err?.message || "Failed to update like. Please try again.");
+      return false;
+    } finally {
+      likeInFlightRef.current.delete(targetId);
+    }
+  };
+
   const handlePostLike = async (postId: string): Promise<boolean> => {
-    return guardAction(async () => {
-      await api.toggleLike("post", postId);
-    });
+    return guardAction(() => runLikeAction("post", postId));
   };
 
   const handleNoteLike = async (noteId: string): Promise<boolean> => {
-    return guardAction(async () => {
-      await api.toggleLike("note", noteId);
-    });
+    return guardAction(() => runLikeAction("note", noteId));
   };
 
   const handleReportPost = async (postId: string) => {
@@ -267,10 +347,29 @@ export default function LiveSocialWallPage() {
   };
 
   const handlePollVote = async (optionId: string): Promise<boolean> => {
-    if (!feed.active_poll) return false;
+    const poll = feed.active_poll;
+    if (!poll) return false;
+    // Prevent duplicate votes while a vote request is in flight.
+    if (pollInFlightRef.current.has(poll.id)) return false;
     return guardAction(async () => {
-      const res = await api.votePoll(feed.active_poll!.id, optionId);
-      setFeed((prev) => ({ ...prev, active_poll: res.poll }));
+      pollInFlightRef.current.add(poll.id);
+      try {
+        const res = await api.votePoll(poll.id, optionId);
+        setFeed((prev) => ({ ...prev, active_poll: res.poll }));
+        return true;
+      } catch (err: any) {
+        if (err?.status === 401) {
+          const state = await getAuthState().catch(() => null);
+          if (!state?.isAuthenticated) {
+            showActionNotice("Please sign in to vote in this poll.");
+            return false;
+          }
+        }
+        showActionNotice(err?.message || "Failed to vote. Please try again.");
+        return false;
+      } finally {
+        pollInFlightRef.current.delete(poll.id);
+      }
     });
   };
 
@@ -382,6 +481,17 @@ export default function LiveSocialWallPage() {
 
         {/* Main Feed Container */}
         <main className="max-w-2xl mx-auto w-full px-4 pt-4 flex flex-col gap-5">
+          {/* Action notice toast (errors from likes, votes, etc.) */}
+          {actionNotice && (
+            <div
+              role="status"
+              className="mx-auto max-w-md p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs font-semibold flex items-center gap-2 animate-in fade-in"
+            >
+              <Icon name="error" size={18} />
+              <span>{actionNotice}</span>
+            </div>
+          )}
+
           {/* 1. Event Hero Banner */}
           <section className="relative w-full rounded-2xl overflow-hidden bg-surface-container border border-outline shadow-xl">
             <div className="relative h-40 sm:h-48 w-full">
@@ -426,9 +536,9 @@ export default function LiveSocialWallPage() {
             </div>
           </section>
 
-          {/* 2. Interactive Poll (if active) */}
+          {/* 2. Interactive Poll (if active) — keyed by poll id so a new poll resets selection state */}
           {feed.active_poll && (
-            <PollCard poll={feed.active_poll} onVote={handlePollVote} />
+            <PollCard key={feed.active_poll.id} poll={feed.active_poll} onVote={handlePollVote} />
           )}
 
           {/* 3. Chain Story Strip (if active) */}
@@ -489,6 +599,7 @@ export default function LiveSocialWallPage() {
                 <NoteCard
                   key={note.id}
                   note={note}
+                  optimisticLike={optimisticLikes[note.id] || null}
                   onLikeToggle={handleNoteLike}
                   onReport={handleReportNote}
                 />
@@ -503,6 +614,7 @@ export default function LiveSocialWallPage() {
                 <PhotoCard
                   key={post.id}
                   post={post}
+                  optimisticLike={optimisticLikes[post.id] || null}
                   onLikeToggle={handlePostLike}
                   onReport={handleReportPost}
                   onExportCard={(p) => setSelectedPostForVibeCard(p)}
@@ -514,6 +626,7 @@ export default function LiveSocialWallPage() {
                 <NoteCard
                   key={note.id}
                   note={note}
+                  optimisticLike={optimisticLikes[note.id] || null}
                   onLikeToggle={handleNoteLike}
                   onReport={handleReportNote}
                 />

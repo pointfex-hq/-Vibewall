@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { PollDTO } from "@/types/vibewall";
 import { Icon } from "@/components/icons";
 
@@ -16,6 +16,13 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Synchronize local selection when the poll identity or its voted state
+  // changes (e.g. a new poll launched via realtime) so stale selections from a
+  // previous poll are never carried over.
+  useEffect(() => {
+    setSelectedOptionId(poll.user_voted_option_id);
+  }, [poll.id, poll.user_voted_option_id]);
+
   const hasVoted = Boolean(selectedOptionId);
   const totalVotes = poll.total_votes || 1; // avoid division by 0
 
@@ -27,9 +34,12 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
     try {
       const result = await onVote?.(optionId);
       if (result === false) {
-        // Blocked by the auth guard — revert the optimistic selection.
+        // Auth guard blocked or the vote failed — revert the optimistic selection.
         setSelectedOptionId(previousSelected);
       }
+    } catch {
+      // Vote request failed — revert the optimistic selection.
+      setSelectedOptionId(previousSelected);
     } finally {
       setIsSubmitting(false);
     }

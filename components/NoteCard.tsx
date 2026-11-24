@@ -6,38 +6,28 @@ import { Icon } from "@/components/icons";
 
 interface NoteCardProps {
   note: NoteDTO;
+  /** Optimistic like state owned by the parent wall; falls back to note props. */
+  optimisticLike?: { liked: boolean; count: number } | null;
   onLikeToggle?: (id: string) => boolean | void | Promise<boolean | void>;
   onReport?: (id: string) => void;
 }
 
 export default function NoteCard({
   note,
+  optimisticLike,
   onLikeToggle,
   onReport,
 }: NoteCardProps) {
-  const [isLiked, setIsLiked] = useState(note.liked_by_me);
-  const [likeCount, setLikeCount] = useState(note.like_count);
   const [reported, setReported] = useState(false);
 
+  // Like state is derived from authoritative feed props; the parent wall
+  // supplies optimistic overrides while a like request is in flight.
+  const isLiked = optimisticLike ? optimisticLike.liked : note.liked_by_me;
+  const likeCount = optimisticLike ? optimisticLike.count : note.like_count;
+
   const handleLike = () => {
-    const previousLiked = isLiked;
-    const previousCount = likeCount;
-    const nextLiked = !isLiked;
-    setIsLiked(nextLiked);
-    setLikeCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
-    const result = onLikeToggle?.(note.id);
-    if (result instanceof Promise) {
-      result.then((res) => {
-        if (res === false) {
-          // Blocked by the auth guard — revert the optimistic like.
-          setIsLiked(previousLiked);
-          setLikeCount(previousCount);
-        }
-      });
-    } else if (result === false) {
-      setIsLiked(previousLiked);
-      setLikeCount(previousCount);
-    }
+    // Parent (wall) owns optimistic toggle + rollback via onLikeToggle.
+    onLikeToggle?.(note.id);
   };
 
   const handleReport = () => {

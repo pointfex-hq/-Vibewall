@@ -124,6 +124,8 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | Shared Auth Required Modal | IMPLEMENTED | `components/auth/AuthRequiredModal.tsx` | VERIFIED |
 | Chain Story Upload Routing | IMPLEMENTED | `app/r/[code]/wall/page.tsx`, `components/ComposerModal.tsx` | VERIFIED |
 | Offline Icons (Lucide) | IMPLEMENTED | `components/icons.tsx` (new), 13 app/component files, `app/layout.tsx`, `app/globals.css` | VERIFIED |
+| Poll State Reset & Realtime Sync | IMPLEMENTED | `components/PollCard.tsx`, `app/r/[code]/wall/page.tsx` | VERIFIED |
+| Optimistic Like Rollback | IMPLEMENTED | `components/PhotoCard.tsx`, `components/NoteCard.tsx`, `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
 | Vibe Notes & Pinning | IMPLEMENTED | `components/NoteCard.tsx` | VERIFIED |
 | Interactive Polls | IMPLEMENTED | `components/PollCard.tsx` | VERIFIED |
@@ -235,9 +237,9 @@ Commands:
 - **Production Build (`npm run build`):** PASSED (`Compiled successfully in 5.6s`).
 - **Live Production Server Daemon:** Running on `http://localhost:3000`.
 - **Automated E2E Playwright UI/UX Test Suite (`code/tests/e2e-ui-test.mjs`):**
-  - **Total Tests:** 36
-  - **Passed:** 36 (100% Success Rate)
-  - **Failed:** 0
+  - **Latest Run:** 46
+    - **Passed:** 46 (100% Success Rate)
+    - **Failed:** 0
   - **Routes & Capabilities Tested:**
     1. **Route 1 (`/`):** Hero branding, active room list, create room modal with theme & duration selection, room launch redirect, quick code join navigation.
     2. **Route 2 (`/r/VIBE26`):** Room code verification, status badge, guest identity, 1-tap entry navigation to wall.
@@ -256,6 +258,7 @@ Commands:
 - Active server daemon: Next.js dev server running on port 3000.
 - All application source files are in `code/`. Stitch design files in `stitch_vibewall/` are untouched.
 - Mock API error contract (Section 17) verified — mock-mode error responses include `error.code` + `error.message`.
+- Poll state reset, optimistic vote rollback, and like-state synchronization (Section 20) implemented and verified — new polls no longer inherit stale voted state; failed vote/like requests roll back optimistically; photo/note like state derives from authoritative feed props with parent-managed optimistic overrides.
 
 ---
 
@@ -516,5 +519,45 @@ E2E suite `tests/e2e-ui-test.mjs` — new Suite 3 assertions (all executed, resu
 - `components/ComposerModal.tsx` — `ComposerMode` type + props, story-entry submit branch, frame-selector hiding, submit labels, close-reset effect.
 - `tests/e2e-ui-test.mjs` — new story upload tests + robust waits (all passing).
 - `PROJECT_CONTEXT.md` — Sections 18 + 19 + tracker rows.
+
+Remaining issues: none.
+
+---
+
+## 20. Poll State Reset, Optimistic Rollback, & Realtime Like Synchronization (Playbook v2.1 §3.2, §3.3; F-03)
+
+**Task:** Fix three related frontend state-management bugs: new polls incorrectly inheriting the previous poll's voted state, failed vote/like requests leaving incorrect optimistic UI, and photo/note like states becoming stale after Realtime updates.
+
+### 20.1 Poll State Reset & New-Poll Lockout (Fixed)
+
+**Root cause:** `PollCard` kept `selectedOptionId` in local state initialized from `poll.user_voted_option_id`; when a Realtime event replaced the active poll, the component could retain the previous poll's selection and treat the new poll as already voted.
+
+**Fix (two safeguards):**
+1. `app/r/[code]/wall/page.tsx`: `<PollCard key={feed.active_poll.id} ... />` forces remount on poll identity change.
+2. `components/PollCard.tsx`: `useEffect` syncs `selectedOptionId` from `poll.user_voted_option_id` when `poll.id` / `poll.user_voted_option_id` change.
+
+**Expected behavior:** A newly launched poll starts with its own voted state; a vote on an old poll never locks voting on a new poll; same-poll realtime updates keep valid selections.
+
+### 20.2 Optimistic Vote Rollback (Fixed)
+
+- Wall `handlePollVote` wraps the vote in `pollInFlightRef` in-flight dedupe, calls `api.votePoll`, reconciles feed with the authoritative `res.poll`, and on error (incl. 401 session re-check) surfaces feedback via the new wall action notice and returns `false`.
+- `guardAction` now propagates the action's boolean outcome (previously always returned `true` after the guarded action ran), so `false` signals rollback to the card.
+- `PollCard.handleVote` reverts the optimistic selection when `onVote` returns `false` or throws.
+
+### 20.3 Like-State Ownership & Optimistic Rollback (Fixed)
+
+**Root cause:** `PhotoCard`/`NoteCard` kept `isLiked`/`likeCount` in local state that could desync from the feed after Realtime updates or failed toggles.
+
+**Fix (parent-owned state):**
+- Wall (`app/r/[code]/wall/page.tsx`): added `optimisticLikes` map (`{ liked, count }` per content id), `likeInFlightRef` dedupe, `getLikeBase` (authoritative state from feed props), and shared `runLikeAction(targetType, targetId)` performing optimistic toggle → `api.toggleLike` → reconcile with `res.liked`/`res.like_count` → rollback + `showActionNotice` on failure. `handlePostLike`/`handleNoteLike` route through `guardAction` + `runLikeAction`.
+- Cards: accept `optimisticLike?: { liked, count } | null` prop and derive display from it (falling back to post/note props) — no local like state.
+
+### 20.4 Files Modified
+
+- `components/PollCard.tsx` — poll identity/voted-state sync effect, optimistic rollback on failure.
+- `app/r/[code]/wall/page.tsx` — poll in-flight guard, vote error handling, like optimistic map/rollback, action notice UI, `key` on PollCard, like props wiring.
+- `components/PhotoCard.tsx` — derive like state from props + `optimisticLike`.
+- `components/NoteCard.tsx` — derive like state from props + `optimisticLike`.
+- `PROJECT_CONTEXT.md` — Section 20 + tracker rows.
 
 Remaining issues: none.

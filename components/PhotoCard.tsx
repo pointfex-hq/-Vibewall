@@ -7,6 +7,8 @@ import { Icon } from "@/components/icons";
 
 interface PhotoCardProps {
   post: PostDTO;
+  /** Optimistic like state owned by the parent wall; falls back to post props. */
+  optimisticLike?: { liked: boolean; count: number } | null;
   onLikeToggle?: (id: string) => boolean | void | Promise<boolean | void>;
   onReport?: (id: string) => void;
   onExportCard?: (post: PostDTO) => void;
@@ -15,37 +17,25 @@ interface PhotoCardProps {
 
 export default function PhotoCard({
   post,
+  optimisticLike,
   onLikeToggle,
   onReport,
   onExportCard,
   themeAccent = "#8B5CF6",
 }: PhotoCardProps) {
-  const [isLiked, setIsLiked] = useState(post.liked_by_me);
-  const [likeCount, setLikeCount] = useState(post.like_count);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   const [reported, setReported] = useState(false);
 
+  // Like state is derived from authoritative feed props; the parent wall
+  // supplies optimistic overrides while a like request is in flight.
+  const isLiked = optimisticLike ? optimisticLike.liked : post.liked_by_me;
+  const likeCount = optimisticLike ? optimisticLike.count : post.like_count;
+
   const handleLike = () => {
-    const previousLiked = isLiked;
-    const previousCount = likeCount;
     setIsLikeAnimating(true);
     setTimeout(() => setIsLikeAnimating(false), 400);
-    const nextLiked = !isLiked;
-    setIsLiked(nextLiked);
-    setLikeCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
-    const result = onLikeToggle?.(post.id);
-    if (result instanceof Promise) {
-      result.then((res) => {
-        if (res === false) {
-          // Blocked by the auth guard — revert the optimistic like.
-          setIsLiked(previousLiked);
-          setLikeCount(previousCount);
-        }
-      });
-    } else if (result === false) {
-      setIsLiked(previousLiked);
-      setLikeCount(previousCount);
-    }
+    // Parent (wall) owns optimistic toggle + rollback via onLikeToggle.
+    onLikeToggle?.(post.id);
   };
 
   const handleDoubleTap = () => {
