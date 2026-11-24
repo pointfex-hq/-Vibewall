@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vw-bg: #09090B;
+  --vw-card: #18181B;
+  --vw-card-low: #131315;
+  --vw-card-high: #27272A;
+  --vw-card-lowest: #0E0E10;
+  --vw-text: #FAFAFA;
+  --vw-muted: #A1A1AA;
+  --vw-accent: #8B5CF6;
+  --vw-accent-container: rgba(139, 92, 246, 0.2);
+  --vw-on-accent: #FFFFFF;
+  --vw-border: #27272A;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: var(--vw-bg);
+    color: var(--vw-text);
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-jakarta), sans-serif;
+  }
+
+  /* Safe Area paddings for mobile viewports */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+  }
+
+  .pt-safe {
+    padding-top: max(env(safe-area-inset-top, 0px), 0.5rem);
+  }
+}
+
+/* Hide scrollbar for seamless mobile feed viewing */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Material symbols adjustments */
+.material-symbols-outlined {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.material-symbols-outlined.fill {
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/* Neon glow utility classes */
+.neon-glow {
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.35);
+}
+
+.neon-glow-pink {
+  box-shadow: 0 0 24px rgba(236, 72, 153, 0.35);
+}
+
+.neon-glow-emerald {
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.35);
+}
+
+@keyframes storyTimer {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}

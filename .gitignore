@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+*/node_modules/
+.pnp
+.pnp.js
+
+# Next.js build outputs
+.next/
+*/.next/
+out/
+build/
+dist/
+
+# Environment files (preserve templates)
+.env*.local
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+!code/.env.example
+
+# Supabase
+supabase/.temp/
+
+# Large temporary archives & downloads
+*.zip
+*.tar.gz
+*.rar
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing & Coverage
+coverage/
+*/coverage/
+
+# Misc & Secrets
+*.pem
+*.tsbuildinfo
+next-env.d.ts
