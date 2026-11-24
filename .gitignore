@@ -53,3 +53,15 @@ coverage/
 *.pem
 *.tsbuildinfo
 next-env.d.ts
+
+# Antigravity / A-Team setup
+.agents/
+docs/
+The_A_Stack/
+The_A_Stack.zip
+CLIENT_QUESTIONS.md
+
+# Vercel
+.vercel
+
+
