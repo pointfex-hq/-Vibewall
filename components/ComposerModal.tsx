@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { validateAndCompressImage, CompressionResult } from "@/lib/upload/compress";
+import { Icon } from "@/components/icons";
 
 interface ComposerModalProps {
   isOpen: boolean;
@@ -144,7 +145,7 @@ export default function ComposerModal({
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">photo_camera</span>
+              <Icon name="photo_camera" size={16} />
               <span>Post Photo</span>
             </button>
             <button
@@ -158,7 +159,7 @@ export default function ComposerModal({
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">chat</span>
+              <Icon name="chat" size={16} />
               <span>Vibe Note</span>
             </button>
           </div>
@@ -167,14 +168,14 @@ export default function ComposerModal({
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <Icon name="close" size={20} />
           </button>
         </div>
 
         {/* Error Alert */}
         {errorMessage && (
           <div className="mx-4 mt-3 p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs font-medium flex items-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">error</span>
+            <Icon name="error" size={18} />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -198,9 +199,7 @@ export default function ComposerModal({
                   className="w-full h-52 rounded-2xl border-2 border-dashed border-outline/60 hover:border-primary/80 bg-surface-container-lowest/50 flex flex-col items-center justify-center gap-2.5 cursor-pointer transition-all hover:bg-primary-container/10 group p-4 text-center"
                 >
                   <div className="w-14 h-14 rounded-full bg-primary-container/30 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                    <span className="material-symbols-outlined text-[28px]">
-                      {isCompressing ? "hourglass_empty" : "add_photo_alternate"}
-                    </span>
+                    <Icon name={isCompressing ? "hourglass_empty" : "add_photo_alternate"} size={28} />
                   </div>
                   <div className="flex flex-col items-center">
                     <span className="font-heading font-bold text-sm text-on-surface">
@@ -228,7 +227,7 @@ export default function ComposerModal({
                       }}
                       className="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1 hover:bg-black/90"
                     >
-                      <span className="material-symbols-outlined text-[14px]">refresh</span>
+                      <Icon name="refresh" size={14} />
                       Change
                     </button>
                     <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px]">
@@ -284,16 +283,14 @@ export default function ComposerModal({
               >
                 {isUploadingPhoto ? (
                   <>
-                    <span className="material-symbols-outlined text-[18px] animate-spin">
-                      progress_activity
-                    </span>
+                    <Icon name="progress_activity" size={18} className="animate-spin" />
                     <span>Posting to live wall...</span>
                   </>
                 ) : photoCooldownRemaining > 0 ? (
                   <span>Cooldown: wait {photoCooldownRemaining}s</span>
                 ) : (
                   <>
-                    <span className="material-symbols-outlined text-[18px]">publish</span>
+                    <Icon name="publish" size={18} />
                     <span>Post Photo to Live Wall</span>
                   </>
                 )}
@@ -349,16 +346,14 @@ export default function ComposerModal({
               >
                 {isSubmittingNote ? (
                   <>
-                    <span className="material-symbols-outlined text-[18px] animate-spin">
-                      progress_activity
-                    </span>
+                    <Icon name="progress_activity" size={18} className="animate-spin" />
                     <span>Broadcasting note...</span>
                   </>
                 ) : noteCooldownRemaining > 0 ? (
                   <span>Cooldown: wait {noteCooldownRemaining}s</span>
                 ) : (
                   <>
-                    <span className="material-symbols-outlined text-[18px]">send</span>
+                    <Icon name="send" size={18} />
                     <span>Post Vibe Note</span>
                   </>
                 )}

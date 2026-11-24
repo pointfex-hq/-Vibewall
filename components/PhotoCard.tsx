@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { PostDTO } from "@/types/vibewall";
+import { Icon } from "@/components/icons";
 
 interface PhotoCardProps {
   post: PostDTO;
@@ -103,7 +104,7 @@ export default function PhotoCard({
             title="Export VibeCard"
             className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary-container/20 transition-all active:scale-95"
           >
-            <span className="material-symbols-outlined text-[18px]">badge</span>
+            <Icon name="badge" size={18} />
           </button>
           <button
             onClick={handleReport}
@@ -115,9 +116,7 @@ export default function PhotoCard({
                 : "text-on-surface-variant hover:text-danger hover:bg-danger/10"
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">
-              {reported ? "flag" : "more_vert"}
-            </span>
+            <Icon name={reported ? "flag" : "more_vert"} size={18} />
           </button>
         </div>
       </div>
@@ -137,9 +136,7 @@ export default function PhotoCard({
             {/* Like animation overlay on double tap */}
             {isLikeAnimating && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="material-symbols-outlined fill text-secondary text-[80px] animate-ping opacity-90 drop-shadow-lg">
-                  favorite
-                </span>
+                <Icon name="favorite" size={80} className="fill text-secondary animate-ping opacity-90 drop-shadow-lg" filled />
               </div>
             )}
           </div>
@@ -152,15 +149,14 @@ export default function PhotoCard({
           onClick={handleLike}
           className="flex items-center gap-1.5 py-1 px-2 rounded-full hover:bg-surface-container-high transition-colors active:scale-95"
         >
-          <span
-            className={`material-symbols-outlined text-[20px] transition-transform ${
-              isLiked
-                ? "fill text-secondary scale-110"
-                : "text-on-surface-variant hover:text-secondary"
+          <Icon
+            name="favorite"
+            size={20}
+            filled={isLiked}
+            className={`transition-transform ${
+              isLiked ? "text-secondary scale-110" : "text-on-surface-variant hover:text-secondary"
             }`}
-          >
-            favorite
-          </span>
+          />
           <span
             className={`font-body font-semibold text-xs ${
               isLiked ? "text-secondary" : "text-on-surface-variant"
@@ -174,7 +170,7 @@ export default function PhotoCard({
           onClick={() => onExportCard?.(post)}
           className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-on-surface py-1 px-2.5 rounded-full bg-primary-container/20 hover:bg-primary-container/40 transition-colors"
         >
-          <span className="material-symbols-outlined text-[16px]">download</span>
+          <Icon name="download" size={16} />
           <span>VibeCard</span>
         </button>
       </div>

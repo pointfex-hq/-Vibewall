@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { getAuthState, signInWithGoogle } from "@/lib/supabase";
+import { Icon } from "@/components/icons";
 
 interface AuthRequiredModalProps {
   isOpen: boolean;
@@ -117,9 +118,7 @@ export default function AuthRequiredModal({
         <div className="flex items-center justify-between border-b border-outline/30 pb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-primary-container/30 flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined text-[20px]">
-                shield_lock
-              </span>
+              <Icon name="shield_lock" size={20} className="text-primary" />
             </div>
             <h3
               id="auth-required-title"
@@ -133,7 +132,7 @@ export default function AuthRequiredModal({
             aria-label="Close dialog"
             className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <Icon name="close" size={20} />
           </button>
         </div>
 
@@ -156,14 +155,12 @@ export default function AuthRequiredModal({
         >
           {isSigningIn ? (
             <>
-              <span className="material-symbols-outlined text-[18px] animate-spin">
-                progress_activity
-              </span>
+              <Icon name="progress_activity" size={18} className="animate-spin" />
               <span>Signing in...</span>
             </>
           ) : (
             <>
-              <span className="material-symbols-outlined text-[20px]">login</span>
+              <Icon name="login" size={20} />
               <span>Continue with Google</span>
             </>
           )}
@@ -174,7 +171,7 @@ export default function AuthRequiredModal({
           onClick={onClose}
           className="w-full py-3 px-4 rounded-2xl font-heading font-bold text-sm bg-surface-container border border-outline/50 text-on-surface hover:text-primary hover:border-primary/40 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
         >
-          <span className="material-symbols-outlined text-[18px]">visibility</span>
+          <Icon name="visibility" size={18} />
           <span>Continue Browsing as Guest</span>
         </button>
 
@@ -184,7 +181,7 @@ export default function AuthRequiredModal({
             role="alert"
             className="p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs font-semibold flex items-center gap-2"
           >
-            <span className="material-symbols-outlined text-[18px]">error</span>
+            <Icon name="error" size={18} />
             <span>{authError}</span>
           </div>
         )}

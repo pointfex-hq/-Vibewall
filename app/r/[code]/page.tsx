@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { getAuthState, signInWithGoogle } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import { Icon } from "@/components/icons";
 
 export default function QrEntryAuthGate() {
   const params = useParams();
@@ -126,7 +127,7 @@ export default function QrEntryAuthGate() {
               href="/"
               className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors"
             >
-              <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+              <Icon name="arrow_back" size={24} />
             </Link>
             <div className="flex flex-col items-center">
               <span className="font-heading font-extrabold text-sm tracking-wider uppercase text-primary">
@@ -151,7 +152,7 @@ export default function QrEntryAuthGate() {
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">verified</span>
+              <Icon name="verified" size={16} />
               <span>Room Verification</span>
             </button>
             <button
@@ -162,25 +163,21 @@ export default function QrEntryAuthGate() {
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">keyboard</span>
+              <Icon name="keyboard" size={16} />
               <span>Switch Code</span>
             </button>
           </div>
 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[36px] animate-spin text-primary">
-                progress_activity
-              </span>
+              <Icon name="progress_activity" size={36} className="animate-spin text-primary" />
               <span className="font-heading text-sm font-semibold">
                 Verifying Room #{roomCode}...
               </span>
             </div>
           ) : errorMessage ? (
             <div className="rounded-2xl bg-danger/10 border border-danger/30 p-6 flex flex-col items-center text-center gap-3">
-              <span className="material-symbols-outlined text-danger text-[40px]">
-                warning
-              </span>
+              <Icon name="warning" size={40} className="text-danger" />
               <h2 className="font-heading font-bold text-lg text-danger">
                 Room Not Found
               </h2>
@@ -238,9 +235,7 @@ export default function QrEntryAuthGate() {
                     {room.title}
                   </h1>
                   <div className="flex items-center gap-1.5 text-on-surface-variant text-xs mt-1">
-                    <span className="material-symbols-outlined text-[16px] text-primary">
-                      schedule
-                    </span>
+                    <Icon name="schedule" size={16} className="text-primary" />
                     <span>
                       Expires: {new Date(room.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
@@ -251,7 +246,7 @@ export default function QrEntryAuthGate() {
               {/* Status Notice if Closed or Expired */}
               {room.status !== "open" && (
                 <div className="p-4 rounded-2xl bg-danger/15 border border-danger/40 text-danger text-xs font-semibold flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[20px]">block</span>
+                  <Icon name="block" size={20} />
                   <span>
                     This event room has been {room.status}. Guest submissions are disabled.
                   </span>
@@ -275,9 +270,7 @@ export default function QrEntryAuthGate() {
               <div className="p-4 rounded-2xl bg-surface-container-low border border-outline/40 flex flex-col gap-3">
                 {!auth.isReady ? (
                   <div className="flex items-center justify-center gap-2 py-1">
-                    <span className="material-symbols-outlined text-[18px] animate-spin text-primary">
-                      progress_activity
-                    </span>
+                    <Icon name="progress_activity" size={18} className="animate-spin text-primary" />
                     <span className="font-body text-xs text-on-surface-variant">
                       Checking session...
                     </span>
@@ -307,9 +300,7 @@ export default function QrEntryAuthGate() {
                 ) : (
                   <>
                     <div className="flex items-center gap-2 text-on-surface-variant">
-                      <span className="material-symbols-outlined text-[20px] text-primary">
-                        shield_lock
-                      </span>
+                      <Icon name="shield_lock" size={20} className="text-primary" />
                       <span className="font-body text-xs font-medium">
                         Sign in with Google to unlock the live wall
                       </span>
@@ -321,11 +312,9 @@ export default function QrEntryAuthGate() {
                         className="flex-1 py-2.5 px-4 rounded-xl font-heading font-bold text-xs bg-primary text-on-primary shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isGoogleLoading ? (
-                          <span className="material-symbols-outlined text-[18px] animate-spin">
-                            progress_activity
-                          </span>
+                          <Icon name="progress_activity" size={18} className="animate-spin" />
                         ) : (
-                          <span className="material-symbols-outlined text-[18px]">login</span>
+                          <Icon name="login" size={18} />
                         )}
                         <span>Continue with Google to Enter</span>
                       </button>
@@ -333,7 +322,7 @@ export default function QrEntryAuthGate() {
                         onClick={() => setMode("preview")}
                         className="flex-1 py-2.5 px-4 rounded-xl font-heading font-bold text-xs bg-surface-container-high border border-outline/50 text-on-surface flex items-center justify-center gap-2 hover:border-primary/40 transition-colors"
                       >
-                        <span className="material-symbols-outlined text-[18px]">visibility</span>
+                        <Icon name="visibility" size={18} />
                         <span>Preview as Read-Only Guest</span>
                       </button>
                     </div>
@@ -353,16 +342,12 @@ export default function QrEntryAuthGate() {
                 >
                   {isJoining ? (
                     <>
-                      <span className="material-symbols-outlined text-[18px] animate-spin">
-                        progress_activity
-                      </span>
+                      <Icon name="progress_activity" size={18} className="animate-spin" />
                       <span>Entering Social Wall...</span>
                     </>
                   ) : (
                     <>
-                      <span className="material-symbols-outlined text-[20px]">
-                        sensors
-                      </span>
+                      <Icon name="sensors" size={20} />
                       <span>Enter Live Social Wall</span>
                     </>
                   )}

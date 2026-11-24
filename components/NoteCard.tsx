@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { NoteDTO } from "@/types/vibewall";
+import { Icon } from "@/components/icons";
 
 interface NoteCardProps {
   note: NoteDTO;
@@ -57,7 +58,7 @@ export default function NoteCard({
       {/* Pinned Badge if applicable */}
       {note.is_pinned && (
         <div className="flex items-center gap-1.5 mb-2 text-primary">
-          <span className="material-symbols-outlined fill text-[16px]">push_pin</span>
+          <Icon name="push_pin" size={16} className="fill" filled />
           <span className="font-heading font-bold text-xs uppercase tracking-wider">
             Pinned Vibe Note
           </span>
@@ -82,13 +83,12 @@ export default function NoteCard({
             onClick={handleLike}
             className="flex items-center gap-1 py-1 px-2 rounded-full hover:bg-surface-container-high transition-colors active:scale-95"
           >
-            <span
-              className={`material-symbols-outlined text-[18px] ${
-                isLiked ? "fill text-secondary" : "text-on-surface-variant"
-              }`}
-            >
-              favorite
-            </span>
+            <Icon
+              name="favorite"
+              size={18}
+              filled={isLiked}
+              className={isLiked ? "text-secondary" : "text-on-surface-variant"}
+            />
             <span
               className={`font-body font-semibold text-xs ${
                 isLiked ? "text-secondary" : "text-on-surface-variant"
@@ -108,9 +108,7 @@ export default function NoteCard({
             }`}
             title="Report note"
           >
-            <span className="material-symbols-outlined text-[16px]">
-              {reported ? "flag" : "more_horiz"}
-            </span>
+            <Icon name={reported ? "flag" : "more_horiz"} size={16} />
           </button>
         </div>
       </div>

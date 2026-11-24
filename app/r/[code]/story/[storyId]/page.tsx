@@ -10,6 +10,7 @@ import { validateAndCompressImage } from "@/lib/upload/compress";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
+import { Icon } from "@/components/icons";
 
 export default function ChainStoryViewer() {
   const params = useParams();
@@ -169,16 +170,12 @@ export default function ChainStoryViewer() {
 
         {isLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <span className="material-symbols-outlined text-[36px] animate-spin text-primary">
-              progress_activity
-            </span>
+            <Icon name="progress_activity" size={36} className="animate-spin text-primary" />
             <span className="font-heading text-sm">Loading Chain Story...</span>
           </div>
         ) : !story || story.entries.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
-            <span className="material-symbols-outlined text-[48px] text-secondary">
-              auto_stories
-            </span>
+            <Icon name="auto_stories" size={48} className="text-secondary" />
             <h2 className="font-heading font-bold text-lg">No Story Moments Yet</h2>
             <p className="font-body text-xs text-white/70 max-w-xs">
               Be the first to ignite this chain story with a photo!
@@ -266,16 +263,14 @@ export default function ChainStoryViewer() {
 
                 <div className="flex items-center gap-1.5 shrink-0">
                   <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md">
-                    <span className="material-symbols-outlined text-[15px] text-tertiary">
-                      visibility
-                    </span>
+                    <Icon name="visibility" size={15} className="text-tertiary" />
                     <span className="font-body text-xs font-semibold">348</span>
                   </div>
                   <Link
                     href={`/r/${roomCode}/wall`}
                     className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white/90 hover:text-white flex items-center justify-center"
                   >
-                    <span className="material-symbols-outlined text-[20px]">close</span>
+                    <Icon name="close" size={20} />
                   </Link>
                 </div>
               </div>
@@ -289,7 +284,7 @@ export default function ChainStoryViewer() {
                 className="w-1/3 h-full cursor-pointer flex items-center justify-start pl-2 opacity-0 hover:opacity-100 transition-opacity"
               >
                 <div className="w-8 h-12 rounded-r-xl bg-black/50 backdrop-blur-sm flex items-center justify-center text-white">
-                  <span className="material-symbols-outlined text-[22px]">chevron_left</span>
+                  <Icon name="chevron_left" size={22} />
                 </div>
               </div>
 
@@ -308,7 +303,7 @@ export default function ChainStoryViewer() {
                 className="w-1/3 h-full cursor-pointer flex items-center justify-end pr-2 opacity-0 hover:opacity-100 transition-opacity"
               >
                 <div className="w-8 h-12 rounded-l-xl bg-black/50 backdrop-blur-sm flex items-center justify-center text-white">
-                  <span className="material-symbols-outlined text-[22px]">chevron_right</span>
+                  <Icon name="chevron_right" size={22} />
                 </div>
               </div>
             </div>
@@ -336,9 +331,7 @@ export default function ChainStoryViewer() {
                 disabled={isUploading}
                 className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-primary via-purple-600 to-secondary text-on-primary font-heading font-bold text-sm shadow-[0_0_24px_rgba(139,92,246,0.6)] flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-[20px]">
-                  {isUploading ? "progress_activity" : "add_a_photo"}
-                </span>
+                <Icon name={isUploading ? "progress_activity" : "add_a_photo"} size={20} />
                 <span>
                   {isUploading ? "Uploading entry..." : "Add Your Photo to this Chain Story"}
                 </span>

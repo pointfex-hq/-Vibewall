@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { subscribeToRoom } from "@/lib/supabase";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import { Icon } from "@/components/icons";
 
 /**
  * Realtime sync helpers for the host dashboard (Section 6.3 — Realtime).
@@ -319,11 +320,11 @@ export default function HostDashboardPage() {
                 className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors"
                 title="View Live Wall"
               >
-                <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                <Icon name="arrow_back" size={20} />
               </Link>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                  <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+                  <Icon name="admin_panel_settings" size={18} />
                 </div>
                 <div className="flex flex-col">
                   <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
@@ -342,7 +343,7 @@ export default function HostDashboardPage() {
                 target="_blank"
                 className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
               >
-                <span className="material-symbols-outlined text-[16px]">tv</span>
+                <Icon name="tv" size={16} />
                 <span>Open Venue Display</span>
               </Link>
 
@@ -350,7 +351,7 @@ export default function HostDashboardPage() {
                 onClick={() => copyToClipboard(window.location.origin + `/r/${roomCode}`, "Guest Invite URL")}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline text-xs font-semibold hover:bg-surface-container-highest"
               >
-                <span className="material-symbols-outlined text-[15px]">share</span>
+                <Icon name="share" size={15} />
                 <span className="hidden sm:inline">Invite Guests</span>
               </button>
             </div>
@@ -360,7 +361,7 @@ export default function HostDashboardPage() {
         {/* Action Toast Alert */}
         {actionNotice && (
           <div className="fixed top-18 right-4 z-50 p-3 rounded-xl bg-primary text-on-primary font-heading font-semibold text-xs shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-            <span className="material-symbols-outlined text-[18px]">check_circle</span>
+            <Icon name="check_circle" size={18} />
             <span>{actionNotice}</span>
           </div>
         )}
@@ -371,7 +372,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Room Status</span>
-                <span className="material-symbols-outlined text-primary text-[18px]">sensors</span>
+                <Icon name="sensors" size={18} className="text-primary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface capitalize">
@@ -384,7 +385,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Live Feed Items</span>
-                <span className="material-symbols-outlined text-tertiary text-[18px]">photo_library</span>
+                <Icon name="photo_library" size={18} className="text-tertiary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface">
@@ -399,7 +400,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Active Poll Votes</span>
-                <span className="material-symbols-outlined text-primary text-[18px]">how_to_vote</span>
+                <Icon name="how_to_vote" size={18} className="text-primary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface">
@@ -412,7 +413,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Active Theme</span>
-                <span className="material-symbols-outlined text-secondary text-[18px]">palette</span>
+                <Icon name="palette" size={18} className="text-secondary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-base sm:text-lg text-on-surface truncate">
@@ -443,7 +444,7 @@ export default function HostDashboardPage() {
                     : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
                 }`}
               >
-                <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                <Icon name={tab.icon} size={16} />
                 <span>{tab.label}</span>
               </button>
             ))}
@@ -516,7 +517,7 @@ export default function HostDashboardPage() {
                             onClick={() => handleModerate("post", post.id, "hide")}
                             className="py-1.5 px-2 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning font-semibold text-xs flex items-center justify-center gap-1"
                           >
-                            <span className="material-symbols-outlined text-[15px]">visibility_off</span>
+                            <Icon name="visibility_off" size={15} />
                             <span>Hide</span>
                           </button>
                         ) : (
@@ -524,7 +525,7 @@ export default function HostDashboardPage() {
                             onClick={() => handleModerate("post", post.id, "restore")}
                             className="py-1.5 px-2 rounded-lg bg-tertiary/15 hover:bg-tertiary/25 text-tertiary font-semibold text-xs flex items-center justify-center gap-1"
                           >
-                            <span className="material-symbols-outlined text-[15px]">restore</span>
+                            <Icon name="restore" size={15} />
                             <span>Restore</span>
                           </button>
                         )}
@@ -533,7 +534,7 @@ export default function HostDashboardPage() {
                           onClick={() => handleModerate("post", post.id, "delete")}
                           className="py-1.5 px-2 rounded-lg bg-danger/15 hover:bg-danger/25 text-danger font-semibold text-xs flex items-center justify-center gap-1"
                         >
-                          <span className="material-symbols-outlined text-[15px]">delete</span>
+                          <Icon name="delete" size={15} />
                           <span>Delete</span>
                         </button>
                       </div>
@@ -678,7 +679,7 @@ export default function HostDashboardPage() {
               {/* Create Poll */}
               <div className="p-5 rounded-2xl bg-surface-container border border-outline/50 flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-[20px]">how_to_vote</span>
+                  <Icon name="how_to_vote" size={20} className="text-primary" />
                   <h3 className="font-heading font-bold text-base text-on-surface">
                     Launch Interactive Poll
                   </h3>
@@ -745,7 +746,7 @@ export default function HostDashboardPage() {
               {/* Create Chain Story */}
               <div className="p-5 rounded-2xl bg-surface-container border border-outline/50 flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[20px]">auto_stories</span>
+                  <Icon name="auto_stories" size={20} className="text-secondary" />
                   <h3 className="font-heading font-bold text-base text-on-surface">
                     Create Chain Story Prompt
                   </h3>

@@ -122,6 +122,7 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | Mock API Error Contract | IMPLEMENTED | `app/api/[...path]/route.ts` | VERIFIED |
 | Live Wall Interactive Auth Guards | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Shared Auth Required Modal | IMPLEMENTED | `components/auth/AuthRequiredModal.tsx` | VERIFIED |
+| Offline Icons (Lucide) | IMPLEMENTED | `components/icons.tsx` (new), 13 app/component files, `app/layout.tsx`, `app/globals.css` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
 | Vibe Notes & Pinning | IMPLEMENTED | `components/NoteCard.tsx` | VERIFIED |
 | Interactive Polls | IMPLEMENTED | `components/PollCard.tsx` | VERIFIED |
@@ -182,8 +183,10 @@ Alvi's backend implements 16 REST endpoints using PostgreSQL connection pool and
    - `lib/api.ts` checks `NEXT_PUBLIC_USE_MOCK` or missing Supabase keys.
    - When keys are missing or offline, it routes to `lib/mock-data.ts`, allowing instant local preview, testing, and deployment verification without requiring active credentials.
    - When real keys are configured in `.env.local`, it executes genuine network calls against the backend routes.
-2. **Offline-Safe Google Fonts**:
-   - Loaded via `<link>` tags in `app/layout.tsx` with font fallbacks in `tailwind.config.ts` to allow `next build` to compile without network dependencies.
+2. **Offline-Safe Icons (Section 18)**:
+   - All icons replaced with `lucide-react` components via the shared `components/icons.tsx` (`Icon`); Material Symbols names from the original design are mapped to the closest Lucide components (e.g., `progress_activity` → `LoaderCircle`, `sensors` → `RadioTower`, `favorite` → `Heart`).
+   - Removed the external Google Material Symbols stylesheet from `app/layout.tsx` and the `.material-symbols-outlined` CSS rules from `app/globals.css`.
+   - All 72+ Material Symbols usages across 13 app/component files were replaced (72 spans + dynamic expressions + host dashboard tab icons).
 3. **HTML5 Canvas VibeCard Exporter**:
    - Zero-dependency canvas rendering with support for both 1080×1920 9:16 Story and Polaroid formats, complete with dynamic QR codes generated via `qrcode`.
 
@@ -442,5 +445,36 @@ Known behavior: `GET /api/screen/bad-token` returns 200 because `mockDB.getRoomB
 
 - `app/api/[...path]/route.ts`
 - `PROJECT_CONTEXT.md` — Section 17 + tracker row "Mock API Error Contract"
+
+Remaining issues: none.
+
+---
+
+## 18. Offline-Safe Icons — Material Symbols → Lucide (Playbook v2.1 §8, Technical Decision #2)
+
+**Target:** Replace the external Google Material Symbols CDN dependency with bundled offline icons from `lucide-react` (already in `package.json`).
+
+### 18.1 Root Cause
+`app/layout.tsx` loaded `https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:...` and rendered icons as `<span className="material-symbols-outlined">icon_name</span>`. At festivals with slow/no internet, icons failed to render.
+
+### 18.2 Implementation
+
+- **New shared component** `components/icons.tsx` — exports `Icon({ name, size, className, filled })`:
+  - `ICON_MAP` maps Material Symbols names → closest Lucide components (`progress_activity` → `LoaderCircle`, `sensors` → `RadioTower`, `favorite` → `Heart`, `visibility` → `Eye`, `send` → `Send`, `check_circle` → `CheckCircle2`, `radio_button_unchecked` → `Circle`, etc.).
+  - Uses `import * as lucide from "lucide-react"` and `size` prop (equivalent of Material `text-[Npx]`), `filled` prop (equivalent of the Material `.fill` variant — adds `fill-current`).
+  - Total: 38 Material Symbols names + 4 host dashboard tab icons + dynamic expression children (e.g., `{copiedToast ? "check" : "content_copy"}`, `{reported ? "flag" : "more_vert"}`, PollCard's `{isSelected ? "check_circle" : "radio_button_unchecked"}`).
+- **72+ span replacements** across 13 files: `app/page.tsx`, `app/r/[code]/page.tsx`, `app/r/[code]/wall/page.tsx`, `app/r/[code]/story/[storyId]/page.tsx`, `app/host/[code]/page.tsx`, `app/screen/[token]/page.tsx`, `components/{PhotoCard,NoteCard,PollCard,ComposerModal,StoryStrip,VibeCardModal,auth/AuthRequiredModal}.tsx`.
+- **Removed** from `app/layout.tsx`: the Material Symbols `<link rel="stylesheet">` (plus the two `preconnect` links that served it).
+- **Removed** from `app/globals.css`: the `.material-symbols-outlined` / `.material-symbols-outlined.fill` CSS rules.
+- Visual parity preserved: sizes (e.g., `text-[15px]` → `size={15}`), colors, `animate-spin`/`animate-ping`, `fill` variants, and Stitch design system untouched. Text fonts (Inter, Plus Jakarta Sans) remain as-is — they are typography, not icons.
+
+### 18.3 Offline Verification
+
+Script: `verify-icons.mjs` (Playwright, against `http://localhost:3000`).
+Results: **lucide SVGs render on all routes (wall: 36, entry: 7)**; **zero requests to any `Material+Symbols` URL**; **no `Material+Symbols` CSS in the document**; only the pre-existing 404 for the missing public asset `/assets/group_of_diverse_university_students_laughing_and_posing_together_with_neon.png` in console.
+
+### 18.4 Files Modified
+
+- `components/icons.tsx` (new), 13 app/component files (icon replacements), `app/layout.tsx`, `app/globals.css`, `PROJECT_CONTEXT.md` — Section 18 + tracker row "Offline Icons (Lucide)".
 
 Remaining issues: none.

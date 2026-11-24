@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { PollDTO } from "@/types/vibewall";
+import { Icon } from "@/components/icons";
 
 interface PollCardProps {
   poll: PollDTO;
@@ -49,9 +50,7 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
             LIVE POLL • {poll.total_votes} votes
           </span>
         </div>
-        <span className="material-symbols-outlined text-primary text-[20px]">
-          how_to_vote
-        </span>
+        <Icon name="how_to_vote" size={20} className="text-primary" />
       </div>
 
       {/* Question */}
@@ -87,15 +86,12 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
               {/* Text & Percentage content */}
               <div className="relative flex items-center justify-between gap-3 z-10">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={`material-symbols-outlined text-[18px] shrink-0 ${
-                      isSelected
-                        ? "text-primary fill"
-                        : "text-on-surface-variant"
-                    }`}
-                  >
-                    {isSelected ? "check_circle" : "radio_button_unchecked"}
-                  </span>
+                  <Icon
+                    name={isSelected ? "check_circle" : "radio_button_unchecked"}
+                    size={18}
+                    filled={isSelected}
+                    className={`shrink-0 ${isSelected ? "text-primary" : "text-on-surface-variant"}`}
+                  />
                   <span className="font-body text-sm font-medium text-on-surface truncate">
                     {option.option_text}
                   </span>

@@ -107,7 +107,12 @@ async function runUITests() {
     // Guest session: clear any mock sign-in stored earlier so the wall behaves as a guest.
     await page.evaluate(() => localStorage.removeItem("vibewall_mock_user"));
     await page.goto(`${BASE_URL}/r/VIBE26/wall`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(800);
+    // Wait for the wall feed to finish loading (room title + feed content).
+    await page.waitForFunction(
+      () => document.querySelector("h1")?.textContent?.includes("Dynamic University Fest 2026"),
+      null,
+      { timeout: 8000 }
+    );
 
     // Verify Live Header & Code Copy
     const headerTitle = await page.textContent("h1");
@@ -151,7 +156,12 @@ async function runUITests() {
     }
 
     // Test Photo Card Like interaction — guest gets the auth modal, then signs in
-    const firstLikeBtn = page.locator("article button:has(span:has-text('favorite'))").first();
+    await page.waitForFunction(
+      () => document.querySelector("article button") !== null,
+      null,
+      { timeout: 8000 }
+    );
+    const firstLikeBtn = page.locator("article button:has(svg.lucide-heart)").first();
     if (await firstLikeBtn.isVisible()) {
       await firstLikeBtn.click();
       await page.waitForTimeout(300);
@@ -182,7 +192,7 @@ async function runUITests() {
 
     // Test Floating Composer (authenticated after the like sign-in)
     await page.click("button:has-text('Write Note')");
-    await page.waitForTimeout(500);
+    await page.locator("textarea[placeholder*='Share a shoutout']").waitFor({ state: "visible", timeout: 8000 });
     const textarea = page.locator("textarea[placeholder*='Share a shoutout']");
     logResult("Floating Composer Opened", await textarea.isVisible());
 

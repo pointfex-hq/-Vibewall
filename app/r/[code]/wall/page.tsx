@@ -23,6 +23,7 @@ import PollCard from "@/components/PollCard";
 import StoryStrip from "@/components/StoryStrip";
 import ComposerModal from "@/components/ComposerModal";
 import VibeCardModal from "@/components/VibeCardModal";
+import { Icon } from "@/components/icons";
 
 export default function LiveSocialWallPage() {
   const params = useParams();
@@ -305,7 +306,7 @@ export default function LiveSocialWallPage() {
               className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
             >
               <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                <span className="material-symbols-outlined text-[18px]">sensors</span>
+                <Icon name="sensors" size={18} />
               </div>
               <div className="flex flex-col">
                 <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
@@ -324,9 +325,7 @@ export default function LiveSocialWallPage() {
                 title="Copy Room Invitation Code"
               >
                 <span>#{roomCode}</span>
-                <span className="material-symbols-outlined text-[15px]">
-                  {copiedToast ? "check" : "content_copy"}
-                </span>
+                <Icon name={copiedToast ? "check" : "content_copy"} size={15} />
               </button>
 
               <Link
@@ -334,7 +333,7 @@ export default function LiveSocialWallPage() {
                 className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
                 title="Host Admin Dashboard"
               >
-                <span className="material-symbols-outlined text-[20px]">tune</span>
+                <Icon name="tune" size={20} />
               </Link>
             </div>
           </div>
@@ -380,9 +379,7 @@ export default function LiveSocialWallPage() {
                 {room?.title || "Live Festival Wall"}
               </h1>
               <div className="flex items-center gap-1.5 text-on-surface-variant text-xs mt-0.5">
-                <span className="material-symbols-outlined text-[16px] text-primary">
-                  location_on
-                </span>
+                <Icon name="location_on" size={16} className="text-primary" />
                 <span>Central Auditorium • Synchronized Realtime</span>
               </div>
             </div>
@@ -481,9 +478,7 @@ export default function LiveSocialWallPage() {
 
           {feed.posts.length === 0 && feed.notes.length === 0 && (
             <div className="py-16 text-center text-on-surface-variant flex flex-col items-center gap-3">
-              <span className="material-symbols-outlined text-[48px] text-primary/60">
-                photo_camera_back
-              </span>
+              <Icon name="photo_camera_back" size={48} className="text-primary/60" />
               <p className="font-heading font-semibold text-sm">
                 The wall is ready! Be the first to share a moment.
               </p>
@@ -504,7 +499,7 @@ export default function LiveSocialWallPage() {
               disabled={!auth.isReady}
               className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-primary to-purple-600 text-on-primary font-heading font-bold text-xs sm:text-sm shadow-[0_0_24px_rgba(139,92,246,0.5)] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
             >
-              <span className="material-symbols-outlined text-[20px]">photo_camera</span>
+              <Icon name="photo_camera" size={20} />
               <span>Post Photo</span>
             </button>
 
@@ -518,7 +513,7 @@ export default function LiveSocialWallPage() {
               disabled={!auth.isReady}
               className="flex-1 py-3 px-4 rounded-2xl bg-surface-container border border-outline text-on-surface hover:text-primary hover:border-primary font-heading font-bold text-xs sm:text-sm shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
-              <span className="material-symbols-outlined text-[20px]">edit_note</span>
+              <Icon name="edit_note" size={20} />
               <span>Write Note</span>
             </button>
           </div>
