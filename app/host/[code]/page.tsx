@@ -10,13 +10,82 @@ import {
   PostDTO,
   NoteDTO,
   PollDTO,
+  RealtimeEventPayloads,
   RoomDTO,
   StoryDTO,
   ThemeKey,
 } from "@/types/vibewall";
 import { api } from "@/lib/api";
+import { subscribeToRoom } from "@/lib/supabase";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
 import ThemeWrapper from "@/components/ThemeWrapper";
+
+/**
+ * Realtime sync helpers for the host dashboard (Section 6.3 — Realtime).
+ * All handlers use functional state updates so newer local state is never
+ * overwritten by stale event data, and new items are deduped by id.
+ */
+function applyNewPost(prev: FeedResponse, post: PostDTO): FeedResponse {
+  if (prev.posts.some((p) => p.id === post.id)) return prev;
+  return { ...prev, posts: [post, ...prev.posts] };
+}
+
+function applyNewNote(prev: FeedResponse, note: NoteDTO): FeedResponse {
+  if (
+    prev.pinned_notes.some((n) => n.id === note.id) ||
+    prev.notes.some((n) => n.id === note.id)
+  ) {
+    return prev;
+  }
+  if (note.is_pinned) {
+    return { ...prev, pinned_notes: [note, ...prev.pinned_notes.filter((n) => n.id !== note.id)] };
+  }
+  return { ...prev, notes: [note, ...prev.notes.filter((n) => n.id !== note.id)] };
+}
+
+function applyModeration(
+  prev: FeedResponse,
+  targetType: RealtimeEventPayloads["content_moderated"]["target_type"],
+  targetId: string,
+  action: RealtimeEventPayloads["content_moderated"]["action"]
+): FeedResponse {
+  if (targetType === "post") {
+    const posts = prev.posts.map((p) =>
+      p.id === targetId
+        ? { ...p, visibility: action === "hide" ? ("hidden" as const) : ("approved" as const) }
+        : p
+    );
+    if (action === "delete") {
+      return { ...prev, posts: posts.filter((p) => p.id !== targetId) };
+    }
+    return { ...prev, posts };
+  }
+  if (targetType === "note") {
+    if (action === "delete") {
+      return {
+        ...prev,
+        pinned_notes: prev.pinned_notes.filter((n) => n.id !== targetId),
+        notes: prev.notes.filter((n) => n.id !== targetId),
+      };
+    }
+    const applyToNote = (n: NoteDTO): NoteDTO => {
+      let updated = n;
+      if (action === "pin") updated = { ...updated, is_pinned: true };
+      if (action === "unpin") updated = { ...updated, is_pinned: false };
+      if (action === "hide" || action === "restore") {
+        updated = {
+          ...updated,
+          moderation_status: action === "hide" ? "hidden" : "approved",
+        };
+      }
+      return updated;
+    };
+    const pinned_notes = prev.pinned_notes.map((n) => (n.id === targetId ? applyToNote(n) : n));
+    const notes = prev.notes.map((n) => (n.id === targetId ? applyToNote(n) : n));
+    return { ...prev, pinned_notes, notes };
+  }
+  return prev;
+}
 
 export default function HostDashboardPage() {
   const params = useParams();
@@ -81,6 +150,37 @@ export default function HostDashboardPage() {
   useEffect(() => {
     if (roomCode) loadData();
   }, [roomCode]);
+
+  // Realtime synchronization with the room (Section 6.3 — Realtime).
+  // Subscribes only after the room has loaded, cleans up on unmount/room change.
+  useEffect(() => {
+    if (!room?.id) return;
+
+    const unsubscribe = subscribeToRoom(room.id, {
+      onNewPost: ({ post }) => {
+        setFeed((prev) => applyNewPost(prev, post));
+      },
+      onNewNote: ({ note }) => {
+        setFeed((prev) => applyNewNote(prev, note));
+      },
+      onContentModerated: (payload) => {
+        setFeed((prev) =>
+          applyModeration(prev, payload.target_type, payload.target_id, payload.action)
+        );
+      },
+      onPollUpdated: ({ poll }) => {
+        // Mirror the live wall: poll_updated carries the authoritative active poll.
+        setFeed((prev) => ({ ...prev, active_poll: poll }));
+      },
+      onThemeUpdated: ({ theme }) => {
+        setRoom((prev) => (prev ? { ...prev, theme } : prev));
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [room?.id]);
 
   const showToast = (msg: string) => {
     setActionNotice(msg);

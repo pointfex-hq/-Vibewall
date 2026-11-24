@@ -118,6 +118,7 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | QR Entry & Room Verification | IMPLEMENTED | `app/r/[code]/page.tsx` | VERIFIED |
 | Guest Entry & Google Auth Gate | IMPLEMENTED | `app/r/[code]/page.tsx`, `lib/auth.ts`, `lib/supabase.ts` | VERIFIED |
 | Live Social Wall | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
+| Host Dashboard Realtime Sync | IMPLEMENTED | `app/host/[code]/page.tsx` | VERIFIED |
 | Live Wall Interactive Auth Guards | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Shared Auth Required Modal | IMPLEMENTED | `components/auth/AuthRequiredModal.tsx` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
@@ -170,6 +171,7 @@ Alvi's backend implements 16 REST endpoints using PostgreSQL connection pool and
   - `poll_updated`: `{ poll: PollDTO }`
   - `theme_updated`: `{ theme: ThemeKey }`
 - Performance target: Synchronization updates within 2 seconds.
+- Subscribed surfaces (Section 16): Live Wall, Venue Display (`/screen/[token]`), and Host Dashboard (`/host/[code]`).
 
 ---
 
@@ -343,3 +345,52 @@ Remaining issues / dependencies:
 - Live Supabase Google OAuth must point back to the app origin (`APP_ORIGIN` in `.env.local`) — the redirect-return flows in Section 14.5 depend on it.
 - The existing e2e poll assertions rely on mock seed data (`user_voted_option_id`); the guest poll-modal assertion runs when the option is enabled.
 - Pre-existing uncommitted files (`ParaNiaChill_Project_Charter_A4.html`, `stitch_vibewall/`) were left untouched and are not part of this change.
+
+---
+
+## 16. Host Dashboard Realtime Synchronization (Playbook v2.1 §6.3 — Realtime; Day 5)
+
+The Host Dashboard (`app/host/[code]/page.tsx`) now subscribes to room realtime using the existing `subscribeToRoom` infrastructure — no second subscription system.
+
+### 16.1 Subscription Lifecycle
+
+```ts
+useEffect(() => {
+  if (!room?.id) return;                       // subscribe only after room loads
+  const unsubscribe = subscribeToRoom(room.id, {
+    onNewPost, onNewNote, onContentModerated, onPollUpdated, onThemeUpdated
+  });
+  return () => unsubscribe();                  // cleanup on unmount / room change
+}, [room?.id]);
+```
+
+- Subscribes only after `room.id` is available; effect cleanup unsubscribes on unmount or room change.
+- The `[room?.id]` dependency + cleanup prevents duplicate subscriptions and handlers (React Strict Mode double-invokes effects in dev — the second run re-subscribes after cleanup, so no duplicates).
+
+### 16.2 Event Handling & State Synchronization
+
+| Event | Behavior (actual payloads per Section 7) |
+|---|---|
+| `new_post` | `{ post: PostDTO }` — prepends the photo to `feed.posts` (beginning of moderation queue) |
+| `new_note` | `{ note: NoteDTO }` — prepends to `feed.pinned_notes` (if `note.is_pinned`) or `feed.notes` |
+| `content_moderated` | `{ target_type, target_id, action }` — applies `action`: posts → `visibility` (`hide`/`restore`), notes → `moderation_status` (`hide`/`restore`), `pin`/`unpin` → `is_pinned`, `delete` → removes the item |
+| `poll_updated` | `{ poll: PollDTO }` — replaces `feed.active_poll` (vote counts via `total_votes`/`options[].vote_count`; mirrors the live wall) |
+| `theme_updated` | `{ theme: ThemeKey }` — updates `room.theme` (Active Theme indicator) |
+
+- All handlers use functional `setFeed`/`setRoom` updates from the latest state — newer local state is never overwritten by stale events.
+- Dedupe: `new_post`/`new_note` skip items whose id already exists in `feed.posts` / `feed.pinned_notes` / `feed.notes` (no double-count of items loaded via the initial `api.getFeed(roomCode, true)` request).
+- Counters ("Live Feed Items", "Active Poll Votes", "Active Theme") update automatically from state; "Restore" (approve) also sets `moderation_status` back to `approved`.
+
+### 16.3 Testing — Host Dashboard Realtime
+
+Script: `verify-host-realtime.mjs` (Playwright, against the local dev server, mock mode).
+Mock-mode limitation: custom window events don't cross pages, so guest actions are dispatched via the existing `vibewall_realtime_event` contract (the same shape `broadcastLocalEvent` produces); a two-browser-session run in real mode subscribes identically via Supabase.
+
+Results (run against `http://localhost:3000`): **TOTAL: 12 — PASSED: 12 — FAILED: 0** — new post appears without reload (6→7), duplicate `new_post` doesn't double-count, pinned note appears, hidden/restored post updates immediately, poll votes update (`got=42`), theme indicator updates (`got=Minimal Paper`), no page/console errors (only the pre-existing 404 for the missing public asset `/assets/group_of_diverse_university_students_laughing_and_posing_together_with_neon.png`).
+
+### 16.4 Files Modified (Realtime Fix)
+
+- `app/host/[code]/page.tsx` — subscription effect + `applyNewPost` / `applyNewNote` / `applyModeration` state-sync helpers.
+- `PROJECT_CONTEXT.md` — Section 16 + tracker row "Host Dashboard Realtime Sync".
+
+Remaining issues: none new; see previous sections for known items.
