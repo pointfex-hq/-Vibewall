@@ -79,6 +79,39 @@ export async function getCurrentUser() {
   return data?.user ?? null;
 }
 
+export interface AuthStateResult {
+  user: any | null;
+  isAuthenticated: boolean;
+}
+
+/**
+ * Returns the current authentication state used by the interactive flows:
+ * a valid signed-in user in real mode, or the persisted mock user when a
+ * sign-in has completed in mock/offline mode. Visitors who have not signed
+ * in are reported as unauthenticated so they can only browse.
+ */
+export async function getAuthState(): Promise<AuthStateResult> {
+  if (typeof window !== "undefined") {
+    const mockUserJson = localStorage.getItem("vibewall_mock_user");
+    if (mockUserJson) {
+      try {
+        const user = JSON.parse(mockUserJson);
+        if (user && typeof user.id === "string" && user.id) {
+          return { user, isAuthenticated: true };
+        }
+      } catch {}
+    }
+  }
+
+  if (isSupabaseConfigured) {
+    const { data } = await supabase.auth.getUser();
+    return { user: data?.user ?? null, isAuthenticated: Boolean(data?.user) };
+  }
+
+  // Mock / offline mode without a completed sign-in = guest.
+  return { user: null, isAuthenticated: false };
+}
+
 export interface RealtimeHandlers {
   onNewPost?: (payload: RealtimeEventPayloads["new_post"]) => void;
   onNewNote?: (payload: RealtimeEventPayloads["new_note"]) => void;

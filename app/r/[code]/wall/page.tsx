@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -14,7 +14,9 @@ import {
 } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { subscribeToRoom } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
 import PhotoCard from "@/components/PhotoCard";
 import NoteCard from "@/components/NoteCard";
 import PollCard from "@/components/PollCard";
@@ -38,6 +40,37 @@ export default function LiveSocialWallPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"all" | "photos" | "notes">("all");
   const [copiedToast, setCopiedToast] = useState(false);
+
+  // Authentication state + shared auth prompt guard
+  const auth = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const pendingActionRef = useRef<(() => void | Promise<void>) | null>(null);
+
+  /**
+   * Runs `action` only when the visitor is authenticated; otherwise opens
+   * the shared sign-in prompt so protected requests never hit the API
+   * while unauthenticated.
+   */
+  const guardAction = useCallback(async (action: () => void | Promise<void>) => {
+    if (!auth.isReady) return false;
+    if (auth.isAuthenticated) {
+      await action();
+      return true;
+    }
+    pendingActionRef.current = action;
+    setIsAuthModalOpen(true);
+    return false;
+  }, [auth.isReady, auth.isAuthenticated]);
+
+  // Resumes the pending action after successful Google sign-in.
+  const handleAuthModalAuthenticated = useCallback(async () => {
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    if (action) {
+      await action();
+    }
+    return true;
+  }, []);
 
   // Floating Composer & Modal states
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -177,20 +210,16 @@ export default function LiveSocialWallPage() {
     }
   };
 
-  const handlePostLike = async (postId: string) => {
-    try {
+  const handlePostLike = async (postId: string): Promise<boolean> => {
+    return guardAction(async () => {
       await api.toggleLike("post", postId);
-    } catch (err) {
-      console.error("Like error:", err);
-    }
+    });
   };
 
-  const handleNoteLike = async (noteId: string) => {
-    try {
+  const handleNoteLike = async (noteId: string): Promise<boolean> => {
+    return guardAction(async () => {
       await api.toggleLike("note", noteId);
-    } catch (err) {
-      console.error("Like error:", err);
-    }
+    });
   };
 
   const handleReportPost = async (postId: string) => {
@@ -222,42 +251,47 @@ export default function LiveSocialWallPage() {
     }
   };
 
-  const handlePollVote = async (optionId: string) => {
-    if (!feed.active_poll) return;
-    try {
-      const res = await api.votePoll(feed.active_poll.id, optionId);
+  const handlePollVote = async (optionId: string): Promise<boolean> => {
+    if (!feed.active_poll) return false;
+    return guardAction(async () => {
+      const res = await api.votePoll(feed.active_poll!.id, optionId);
       setFeed((prev) => ({ ...prev, active_poll: res.poll }));
-    } catch (err) {
-      console.error("Vote error:", err);
-    }
+    });
   };
 
   const handleSubmitPhoto = async (data: {
     file: File;
     frameId: string;
     authorName: string;
-  }) => {
-    const uploadRes = await api.uploadPhoto(data.file);
-    const postRes = await api.createPost(roomCode, {
-      image_url: uploadRes.image_url,
-      cloudinary_public_id: uploadRes.cloudinary_public_id,
-      frame_id: data.frameId,
-      author_name: data.authorName,
+  }): Promise<boolean> => {
+    return guardAction(async () => {
+      const uploadRes = await api.uploadPhoto(data.file);
+      const postRes = await api.createPost(roomCode, {
+        image_url: uploadRes.image_url,
+        cloudinary_public_id: uploadRes.cloudinary_public_id,
+        frame_id: data.frameId,
+        author_name: data.authorName,
+      });
+      setFeed((prev) => ({
+        ...prev,
+        posts: [postRes.post, ...prev.posts.filter((p) => p.id !== postRes.post.id)],
+      }));
+      setPhotoCooldownRemaining(20);
     });
-    setFeed((prev) => ({
-      ...prev,
-      posts: [postRes.post, ...prev.posts.filter((p) => p.id !== postRes.post.id)],
-    }));
-    setPhotoCooldownRemaining(20);
   };
 
-  const handleSubmitNote = async (data: { body: string; authorName: string }) => {
-    const res = await api.createNote(roomCode, data.body, data.authorName);
-    setFeed((prev) => ({
-      ...prev,
-      notes: [res.note, ...prev.notes.filter((n) => n.id !== res.note.id)],
-    }));
-    setNoteCooldownRemaining(15);
+  const handleSubmitNote = async (data: {
+    body: string;
+    authorName: string;
+  }): Promise<boolean> => {
+    return guardAction(async () => {
+      const res = await api.createNote(roomCode, data.body, data.authorName);
+      setFeed((prev) => ({
+        ...prev,
+        notes: [res.note, ...prev.notes.filter((n) => n.id !== res.note.id)],
+      }));
+      setNoteCooldownRemaining(15);
+    });
   };
 
   return (
@@ -365,8 +399,10 @@ export default function LiveSocialWallPage() {
               story={feed.active_story}
               roomCode={roomCode}
               onAddEntry={() => {
-                setComposerDefaultTab("photo");
-                setIsComposerOpen(true);
+                void guardAction(() => {
+                  setComposerDefaultTab("photo");
+                  setIsComposerOpen(true);
+                });
               }}
             />
           )}
@@ -460,9 +496,12 @@ export default function LiveSocialWallPage() {
           <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-center gap-3 pointer-events-auto">
             <button
               onClick={() => {
-                setComposerDefaultTab("photo");
-                setIsComposerOpen(true);
+                void guardAction(() => {
+                  setComposerDefaultTab("photo");
+                  setIsComposerOpen(true);
+                });
               }}
+              disabled={!auth.isReady}
               className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-primary to-purple-600 text-on-primary font-heading font-bold text-xs sm:text-sm shadow-[0_0_24px_rgba(139,92,246,0.5)] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
             >
               <span className="material-symbols-outlined text-[20px]">photo_camera</span>
@@ -471,9 +510,12 @@ export default function LiveSocialWallPage() {
 
             <button
               onClick={() => {
-                setComposerDefaultTab("note");
-                setIsComposerOpen(true);
+                void guardAction(() => {
+                  setComposerDefaultTab("note");
+                  setIsComposerOpen(true);
+                });
               }}
+              disabled={!auth.isReady}
               className="flex-1 py-3 px-4 rounded-2xl bg-surface-container border border-outline text-on-surface hover:text-primary hover:border-primary font-heading font-bold text-xs sm:text-sm shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <span className="material-symbols-outlined text-[20px]">edit_note</span>
@@ -500,6 +542,13 @@ export default function LiveSocialWallPage() {
           post={selectedPostForVibeCard}
           roomTitle={room?.title || "VibeWall Event"}
           roomCode={roomCode}
+        />
+
+        {/* Shared auth prompt for unauthenticated interactive actions */}
+        <AuthRequiredModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthenticated={handleAuthModalAuthenticated}
         />
       </div>
     </ThemeWrapper>

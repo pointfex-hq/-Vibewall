@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { StoryDTO, StoryEntryDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { validateAndCompressImage } from "@/lib/upload/compress";
+import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
 
 export default function ChainStoryViewer() {
   const params = useParams();
@@ -22,9 +24,27 @@ export default function ChainStoryViewer() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  const auth = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const SEGMENT_DURATION_MS = 6000; // 6 seconds per segment
+
+  /**
+   * Guards story contributions: unauthenticated visitors get the shared
+   * sign-in prompt instead of reaching the API.
+   */
+  const guardAction = useCallback(
+    async (action: () => void | Promise<void>) => {
+      if (auth.isAuthenticated) {
+        await action();
+        return true;
+      }
+      setIsAuthModalOpen(true);
+      return false;
+    },
+    [auth.isAuthenticated]
+  );
 
   // Load feed and find current active story
   useEffect(() => {
@@ -92,35 +112,45 @@ export default function ChainStoryViewer() {
     }
   };
 
+  const startStoryEntry = async (file: File) => {
+    await guardAction(async () => {
+      setIsUploading(true);
+      setErrorMessage("");
+      try {
+        const compressed = await validateAndCompressImage(file);
+        const uploadRes = await api.uploadPhoto(compressed.file);
+        const res = await api.addStoryEntry(story!.id, {
+          image_url: uploadRes.image_url,
+          cloudinary_public_id: uploadRes.cloudinary_public_id,
+          author_name: "FestSquad",
+        });
+
+        setStory((prev) =>
+          prev
+            ? {
+                ...prev,
+                entries: [...prev.entries, res.entry],
+              }
+            : prev
+        );
+        setCurrentIndex(story!.entries.length);
+        setProgress(0);
+      } catch (err: any) {
+        setErrorMessage(err.message || "Failed to add story entry");
+      } finally {
+        setIsUploading(false);
+      }
+    });
+  };
+
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !story) return;
 
-    setIsUploading(true);
-    setErrorMessage("");
-    try {
-      const compressed = await validateAndCompressImage(file);
-      const uploadRes = await api.uploadPhoto(compressed.file);
-      const res = await api.addStoryEntry(story.id, {
-        image_url: uploadRes.image_url,
-        cloudinary_public_id: uploadRes.cloudinary_public_id,
-        author_name: "FestSquad",
-      });
-
-      setStory((prev) =>
-        prev
-          ? {
-              ...prev,
-              entries: [...prev.entries, res.entry],
-            }
-          : prev
-      );
-      setCurrentIndex(story.entries.length);
-      setProgress(0);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Failed to add story entry");
-    } finally {
-      setIsUploading(false);
+    const ok = await guardAction(() => startStoryEntry(file));
+    if (ok === false) {
+      // Blocked by the auth guard — allow the user to pick another file.
+      e.target.value = "";
     }
   };
 
@@ -317,6 +347,12 @@ export default function ChainStoryViewer() {
           </div>
         )}
       </div>
+
+      {/* Shared auth prompt for unauthenticated story contributions */}
+      <AuthRequiredModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </ThemeWrapper>
   );
 }

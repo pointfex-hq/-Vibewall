@@ -5,7 +5,7 @@ import { NoteDTO } from "@/types/vibewall";
 
 interface NoteCardProps {
   note: NoteDTO;
-  onLikeToggle?: (id: string) => void;
+  onLikeToggle?: (id: string) => boolean | void | Promise<boolean | void>;
   onReport?: (id: string) => void;
 }
 
@@ -19,10 +19,24 @@ export default function NoteCard({
   const [reported, setReported] = useState(false);
 
   const handleLike = () => {
+    const previousLiked = isLiked;
+    const previousCount = likeCount;
     const nextLiked = !isLiked;
     setIsLiked(nextLiked);
     setLikeCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
-    onLikeToggle?.(note.id);
+    const result = onLikeToggle?.(note.id);
+    if (result instanceof Promise) {
+      result.then((res) => {
+        if (res === false) {
+          // Blocked by the auth guard — revert the optimistic like.
+          setIsLiked(previousLiked);
+          setLikeCount(previousCount);
+        }
+      });
+    } else if (result === false) {
+      setIsLiked(previousLiked);
+      setLikeCount(previousCount);
+    }
   };
 
   const handleReport = () => {

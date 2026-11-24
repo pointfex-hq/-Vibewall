@@ -7,8 +7,9 @@ import { validateAndCompressImage, CompressionResult } from "@/lib/upload/compre
 interface ComposerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitPhoto: (data: { file: File; frameId: string; authorName: string }) => Promise<void>;
-  onSubmitNote: (data: { body: string; authorName: string }) => Promise<void>;
+  /** Returns false when the action is blocked by the auth guard. */
+  onSubmitPhoto: (data: { file: File; frameId: string; authorName: string }) => Promise<boolean | void>;
+  onSubmitNote: (data: { body: string; authorName: string }) => Promise<boolean | void>;
   defaultTab?: "photo" | "note";
   photoCooldownRemaining?: number;
   noteCooldownRemaining?: number;
@@ -70,11 +71,15 @@ export default function ComposerModal({
     setErrorMessage(null);
     setIsUploadingPhoto(true);
     try {
-      await onSubmitPhoto({
+      const ok = await onSubmitPhoto({
         file: selectedFile,
         frameId: selectedFrame,
         authorName: photoAuthor.trim() || "VibeGuest",
       });
+      if (ok === false) {
+        // Blocked by the auth guard — keep the composer open for retry.
+        return;
+      }
       // Reset & close
       setSelectedFile(null);
       setPreviewResult(null);
@@ -98,10 +103,14 @@ export default function ComposerModal({
     setErrorMessage(null);
     setIsSubmittingNote(true);
     try {
-      await onSubmitNote({
+      const ok = await onSubmitNote({
         body: noteBody.trim(),
         authorName: noteAuthor.trim() || "VibeGuest",
       });
+      if (ok === false) {
+        // Blocked by the auth guard — keep the composer open for retry.
+        return;
+      }
       setNoteBody("");
       onClose();
     } catch (err: any) {

@@ -6,7 +6,7 @@ import { PostDTO } from "@/types/vibewall";
 
 interface PhotoCardProps {
   post: PostDTO;
-  onLikeToggle?: (id: string) => void;
+  onLikeToggle?: (id: string) => boolean | void | Promise<boolean | void>;
   onReport?: (id: string) => void;
   onExportCard?: (post: PostDTO) => void;
   themeAccent?: string;
@@ -25,12 +25,26 @@ export default function PhotoCard({
   const [reported, setReported] = useState(false);
 
   const handleLike = () => {
+    const previousLiked = isLiked;
+    const previousCount = likeCount;
     setIsLikeAnimating(true);
     setTimeout(() => setIsLikeAnimating(false), 400);
     const nextLiked = !isLiked;
     setIsLiked(nextLiked);
     setLikeCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
-    onLikeToggle?.(post.id);
+    const result = onLikeToggle?.(post.id);
+    if (result instanceof Promise) {
+      result.then((res) => {
+        if (res === false) {
+          // Blocked by the auth guard — revert the optimistic like.
+          setIsLiked(previousLiked);
+          setLikeCount(previousCount);
+        }
+      });
+    } else if (result === false) {
+      setIsLiked(previousLiked);
+      setLikeCount(previousCount);
+    }
   };
 
   const handleDoubleTap = () => {

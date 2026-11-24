@@ -5,7 +5,7 @@ import { PollDTO } from "@/types/vibewall";
 
 interface PollCardProps {
   poll: PollDTO;
-  onVote?: (optionId: string) => void;
+  onVote?: (optionId: string) => boolean | void | Promise<boolean | void>;
   className?: string;
 }
 
@@ -20,10 +20,15 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
 
   const handleVote = async (optionId: string) => {
     if (hasVoted || isSubmitting) return;
+    const previousSelected = selectedOptionId;
     setIsSubmitting(true);
     setSelectedOptionId(optionId);
     try {
-      await onVote?.(optionId);
+      const result = await onVote?.(optionId);
+      if (result === false) {
+        // Blocked by the auth guard — revert the optimistic selection.
+        setSelectedOptionId(previousSelected);
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const BASE_URL = "http://localhost:3000";
-const SCREENSHOTS_DIR = "/home/jitu/Downloads/VibeWall/code/tests/screenshots";
+const SCREENSHOTS_DIR = "/home/jitu/Downloads/VibeWall/tests/screenshots";
 
 async function runUITests() {
   console.log("==================================================");
@@ -82,21 +82,30 @@ async function runUITests() {
     const statusBadge = await page.locator("text=Status: open").isVisible();
     logResult("Room Status Badge Open", statusBadge);
 
-    // Verify 1-Tap Entry / Join Button
-    const enterWallBtn = page.locator("button:has-text('Enter Live Social Wall')");
-    logResult("Enter Social Wall Button Visible", await enterWallBtn.isVisible());
+    // Verify the Guest Entry CTAs
+    const googleEntryBtn = page.locator("button:has-text('Continue with Google to Enter')");
+    const previewGuestBtn = page.locator("button:has-text('Preview as Read-Only Guest')");
+    logResult("Guest Can See Google Sign-In CTA", await googleEntryBtn.isVisible());
+    logResult("Guest Can See Preview as Read-Only CTA", await previewGuestBtn.isVisible());
+
+    // Guest preview must not navigate into the wall
+    await previewGuestBtn.click();
+    await page.waitForTimeout(300);
+    logResult("Guest Preview Stays on Entry Page", page.url().includes("/r/VIBE26"));
+
+    // Sign in through the primary CTA and enter the wall
+    await googleEntryBtn.click();
+    await page.waitForURL("**/r/VIBE26/wall", { timeout: 8000 });
+    logResult("Google Sign-In Enters the Live Wall", page.url().includes("/r/VIBE26/wall"));
 
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "2-qr-entry-gate.png") });
-
-    // Click Enter Wall -> redirects to /r/VIBE26/wall
-    await enterWallBtn.click();
-    await page.waitForURL("**/r/VIBE26/wall", { timeout: 8000 });
-    logResult("Auth Gate Redirects to /r/VIBE26/wall", page.url().includes("/r/VIBE26/wall"));
 
     // ----------------------------------------------------
     // TEST SUITE 3: Route /r/[code]/wall (Live Social Wall)
     // ----------------------------------------------------
     console.log("\n>>> Testing Route 3: Live Social Wall (/r/VIBE26/wall)");
+    // Guest session: clear any mock sign-in stored earlier so the wall behaves as a guest.
+    await page.evaluate(() => localStorage.removeItem("vibewall_mock_user"));
     await page.goto(`${BASE_URL}/r/VIBE26/wall`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(800);
 
@@ -130,14 +139,33 @@ async function runUITests() {
     const pinnedNote = await page.locator("text=Pinned Vibe Note").first().isVisible();
     logResult("Pinned Vibe Note Highlighted at Top", pinnedNote);
 
-    // Test Photo Card Like interaction
+    // Guest Poll Vote — click shows the auth modal (shared guard with the like flow)
+    const pollOption = page.locator("button:has-text('Arijit Singh')").first();
+    if (await pollOption.isVisible() && !(await pollOption.isDisabled())) {
+      await pollOption.click();
+      await page.waitForTimeout(300);
+      const guestPollModal = await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible();
+      logResult("Guest Poll Vote Click Shows Auth Modal", guestPollModal);
+      await page.click("button:has-text('Continue with Google')");
+      await page.waitForTimeout(800);
+    }
+
+    // Test Photo Card Like interaction — guest gets the auth modal, then signs in
     const firstLikeBtn = page.locator("article button:has(span:has-text('favorite'))").first();
     if (await firstLikeBtn.isVisible()) {
-      const initialLikeText = await firstLikeBtn.textContent();
       await firstLikeBtn.click();
       await page.waitForTimeout(300);
+      const guestLikeModal = await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible();
+      logResult("Guest Like Click Shows Auth Modal", guestLikeModal);
+      // Continue with Google so the guest session is established
+      await page.click("button:has-text('Continue with Google')");
+      await page.waitForTimeout(800);
+      // Authenticated clicks work again
+      const afterSignInText = await firstLikeBtn.textContent();
+      await firstLikeBtn.click();
+      await page.waitForTimeout(400);
       const updatedLikeText = await firstLikeBtn.textContent();
-      logResult("Like Button Counter Interaction", true, `${initialLikeText?.trim()} -> ${updatedLikeText?.trim()}`);
+      logResult("Like Works After Google Sign-In", afterSignInText !== updatedLikeText, `${afterSignInText?.trim()} -> ${updatedLikeText?.trim()}`);
     }
 
     // Test VibeCard Exporter Modal
@@ -152,7 +180,7 @@ async function runUITests() {
     await page.click("button:has-text('Cancel')");
     await page.waitForTimeout(300);
 
-    // Test Floating Composer: Post a Vibe Note
+    // Test Floating Composer (authenticated after the like sign-in)
     await page.click("button:has-text('Write Note')");
     await page.waitForTimeout(500);
     const textarea = page.locator("textarea[placeholder*='Share a shoutout']");
@@ -169,6 +197,14 @@ async function runUITests() {
     // Verify the newly posted note appears in the feed
     const newNoteVisible = await page.locator(`text=${testNoteText}`).isVisible();
     logResult("New Vibe Note Live Feed Integration", newNoteVisible, "Broadcasted & displayed instantly");
+
+    // Poll Vote — while authenticated, clicking a poll option must not show the auth modal
+    const pollOption2 = page.locator("button:has-text('Arijit Singh')").first();
+    if (await pollOption2.isVisible()) {
+      await pollOption2.click().catch(() => {});
+      await page.waitForTimeout(300);
+      logResult("Poll Vote While Authenticated Skips Auth Modal", !(await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible()));
+    }
 
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "3-live-wall-full.png") });
 

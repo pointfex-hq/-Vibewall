@@ -10,14 +10,9 @@
 
 ## 1. Project Overview
 
-VibeWall is an interactive, no-login, QR-based live social wall engineered for university festivals, hackathons, concerts, and campus hangout venues. 
+VibeWall is an interactive, QR-based live social wall engineered for university festivals, hackathons, concerts, and campus hangout venues.
 
-Participants scan a venue QR code from a mobile device to immediately join an active event room without creating a password-based account. Guests can:
-- Post photos with customizable event frames (Classic, Neon Glow, Fest '26, Sunset) compressed automatically on-device to under 2 MB.
-- Write Vibe Notes and live confessions (up to 280 characters).
-- Participate in single-choice real-time interactive polls with live animated progress bars.
-- Add moments to sequential Chain Stories.
-- Export high-resolution 1080×1920 Story and Polaroid cards (VibeCards) containing author details, room QR, and frame branding via HTML5 Canvas.
+Participants scan a venue QR code from a mobile device to open a room's gate. Visitors may preview the room without signing in, but Google authentication (Supabase OAuth) is mandatory before any interactive or write operation: joining the live wall, publishing photos, posting Vibe Notes, liking, voting in polls, and creating or contributing to Chain Stories.
 
 Hosts manage the event via an administrative dashboard:
 - Moderating submissions (approving, hiding, pinning top notes, permanently deleting with Cloudinary media purge).
@@ -121,7 +116,10 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | Landing & Host Portal | IMPLEMENTED | `app/page.tsx` | VERIFIED |
 | Create Room Modal | IMPLEMENTED | `app/page.tsx`, `lib/api.ts` | VERIFIED |
 | QR Entry & Room Verification | IMPLEMENTED | `app/r/[code]/page.tsx` | VERIFIED |
+| Guest Entry & Google Auth Gate | IMPLEMENTED | `app/r/[code]/page.tsx`, `lib/auth.ts`, `lib/supabase.ts` | VERIFIED |
 | Live Social Wall | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
+| Live Wall Interactive Auth Guards | IMPLEMENTED | `app/r/[code]/wall/page.tsx` | VERIFIED |
+| Shared Auth Required Modal | IMPLEMENTED | `components/auth/AuthRequiredModal.tsx` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
 | Vibe Notes & Pinning | IMPLEMENTED | `components/NoteCard.tsx` | VERIFIED |
 | Interactive Polls | IMPLEMENTED | `components/PollCard.tsx` | VERIFIED |
@@ -262,3 +260,86 @@ Commands:
    - Set `NEXT_PUBLIC_USE_MOCK=false`
    - Verify that Google OAuth callback URL in Supabase points to the app origin.
 4. All application code must remain strictly inside `./code/`. Do not modify `./stitch_vibewall/`.
+
+---
+
+## 14. Authentication & Guest Access (Playbook v2.1 §1.1, F-01; Route 2: `/r/[code]`)
+
+Guests can browse a room's preview without signing in; Google authentication is mandatory before any interactive or write operation. No protected API request is made while unauthenticated.
+
+### 14.1 Shared Auth State
+
+- `lib/supabase.ts` — `getAuthState(): { user, isAuthenticated }` (existing `getCurrentUser`/`signInWithGoogle` unchanged):
+  - Real mode (Supabase configured): `supabase.auth.getUser()` → authenticated when a user session exists.
+  - Mock mode: a persisted `vibewell_mock_user` in localStorage → authenticated; no session → guest.
+- `lib/auth.ts` — `useAuth()` hook returns `{ user, isAuthenticated, isReady }`. `isReady` separates "session loading" from "unauthenticated" so guest-only controls are not shown while the session is restored.
+
+### 14.2 Room Entry (`app/r/[code]/page.tsx`)
+
+- Guests see the normal room preview (status badge, title, expiry).
+- Primary CTA: **"Continue with Google to Enter"** — calls `signInWithGoogle()`, preserving the room code and destination via `redirectTo = window.location.href`.
+- Secondary CTA: **"Preview as Read-Only Guest"** — keeps visitors on the entry page without calling `api.joinRoom(code)`.
+- Guest notice: "Viewing as a guest — sign in with Google to like, vote, and share moments on the live wall."
+- Authenticated visitors see the normal identity bar (avatar + Google-verified name) and the normal **"Enter Live Social Wall"** CTA.
+- After auth confirmation the room is joined automatically (`api.joinRoom`) and the visitor navigates to `/r/[code]/wall`. Duplicate joins are prevented by `joinInProgressRef` + `hasJoinedRef`.
+- Errors: expired/failed joins show a message on the entry page (after re-checking the session via `getAuthState()`).
+
+### 14.3 Live Wall Guards (`app/r/[code]/wall/page.tsx`)
+
+All interactive actions are wrapped in a shared `guardAction(action)`:
+
+| Feature | Unauthenticated behavior |
+|---|---|
+| View room + feed | Allowed (read-only) |
+| Like a post / note | AuthRequiredModal opens |
+| Vote in a poll | AuthRequiredModal opens |
+| Open photo composer ("Post Photo" / "Write Note") | AuthRequiredModal opens |
+| Publish a photo | AuthRequiredModal opens |
+| Post a Vibe Note | AuthRequiredModal opens |
+| Add photo to Chain Story (StoryStrip) | AuthRequiredModal opens |
+| Contribute to a Chain Story (`app/r/[code]/story/[storyId]/page.tsx`) | AuthRequiredModal opens |
+
+`guardAction` returns `false` when the visitor is unauthenticated so no protected request reaches the API; the cards revert their optimistic UI on `false` (see `components/PhotoCard.tsx`, `components/NoteCard.tsx`, `components/PollCard.tsx`). Authenticated users proceed with the existing actions unchanged.
+
+### 14.4 Shared Auth Prompt Modal
+
+- `components/auth/AuthRequiredModal.tsx` — the single shared prompt (title "Sign in to Join the Vibe", description, "Continue with Google" primary, "Continue Browsing as Guest" secondary).
+  - Primary invokes `signInWithGoogle(window.location.href)`; on success it re-checks `getAuthState()` and resumes the pending action via `onAuthenticated` (returns false to stay open).
+  - Backdrop click, close button, and Escape dismiss the modal. Focus management, a simple focus trap, and ARIA roles (`dialog`, `aria-modal`, labels) are implemented.
+  - Loading state while signing in; error state for cancelled/failed OAuth; duplicate OAuth prevented via `isSigningIn`.
+
+### 14.5 OAuth Redirect & Return
+
+`signInWithGoogle(redirectTo)` (existing) sends `redirectTo` to Supabase; after the Google redirect the user returns to the same page (`/r/[code]` or `/r/[code]/wall`), `useAuth` loads the session, and:
+- On `/r/[code]` the room is auto-joined and the visitor is pushed to `/r/[code]/wall`.
+- On `/r/[code]/wall` the modal resumes the originally requested action; otherwise the user retries manually.
+- In mock mode, `signInWithGoogle` persists the mock user to localStorage and the same guards resume immediately.
+
+### 14.6 Files Modified (Auth Fix)
+
+- `app/r/[code]/page.tsx` — guest/auth entry flows (Section 14.2).
+- `app/r/[code]/wall/page.tsx` — `guardAction` + protected handlers (Section 14.3).
+- `app/r/[code]/story/[storyId]/page.tsx` — story contribution guard.
+- `components/auth/AuthRequiredModal.tsx` — new shared prompt modal.
+- `components/ComposerModal.tsx`, `components/PollCard.tsx`, `components/PhotoCard.tsx`, `components/NoteCard.tsx` — return/revert on auth guard result.
+- `lib/supabase.ts` — new `getAuthState()`.
+- `lib/auth.ts` — new `useAuth()` hook.
+- `tests/e2e-ui-test.mjs` — guest entry, guest like/poll modal, authenticated flows; stale `SCREENSHOTS_DIR` fixed.
+- `PROJECT_CONTEXT.md` — this section + Testing History updates.
+
+---
+
+## 15. Testing & Verification History (Authentication Fix)
+
+All commands were executed inside `./code/`:
+
+- `npx tsc --noEmit` → PASSED (exit 0, 0 errors).
+- `npm run build` → PASSED (Next.js 15.5.29, "Compiled successfully", all routes built).
+- `npm run lint` → `next lint` is interactive: the repo has no ESLint config, so running it non-interactively prints the "How would you like to configure ESLint?" prompt and cannot lint. Reported as a limitation; not silently skipped.
+- E2E suite `tests/e2e-ui-test.mjs` (Playwright + headless Chromium, mock mode, `http://localhost:3000`): **TOTAL: 40, PASSED: 40, FAILED: 0, SUCCESS RATE: 100%** — new assertions: "Guest Can See Google Sign-In CTA", "Guest Can See Preview as Read-Only CTA", "Guest Preview Stays on Entry Page", "Google Sign-In Enters the Live Wall", "Guest Like Click Shows Auth Modal", "Like Works After Google Sign-In", "Poll Vote While Authenticated Skips Auth Modal", plus the pre-existing 35 UI smoke tests.
+- Browser console during e2e: no errors/warnings from the changed pages (the app compiled cleanly; the 404 seen in debug scripts was a pre-existing missing public asset).
+
+Remaining issues / dependencies:
+- Live Supabase Google OAuth must point back to the app origin (`APP_ORIGIN` in `.env.local`) — the redirect-return flows in Section 14.5 depend on it.
+- The existing e2e poll assertions rely on mock seed data (`user_voted_option_id`); the guest poll-modal assertion runs when the option is enabled.
+- Pre-existing uncommitted files (`ParaNiaChill_Project_Charter_A4.html`, `stitch_vibewall/`) were left untouched and are not part of this change.
