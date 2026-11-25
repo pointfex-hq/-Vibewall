@@ -52,10 +52,10 @@ export async function generateVibeCardCanvas(options: VibeCardOptions): Promise<
     typeof window !== "undefined" ? `${window.location.origin}/r/${roomCode}` : `https://vibewall.app/r/${roomCode}`,
     {
       width: 240,
-      margin: 1,
+      margin: 4,
       color: {
-        dark: "#FAFAFA",
-        light: "#00000000",
+        dark: "#171717",
+        light: "#FFFFFF",
       },
     }
   );

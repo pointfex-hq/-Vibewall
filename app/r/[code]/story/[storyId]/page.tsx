@@ -1,13 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { StoryDTO, StoryEntryDTO } from "@/types/vibewall";
+import { StoryDTO, StoryEntryDTO, ThemeKey } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { validateAndCompressImage } from "@/lib/upload/compress";
+import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
+import { Icon } from "@/components/icons";
 
 export default function ChainStoryViewer() {
   const params = useParams();
@@ -15,6 +18,7 @@ export default function ChainStoryViewer() {
   const roomCode = String(params.code || "").toUpperCase();
   const storyId = String(params.storyId || "");
 
+  const [theme, setTheme] = useState<ThemeKey>();
   const [story, setStory] = useState<StoryDTO | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -22,20 +26,41 @@ export default function ChainStoryViewer() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
+  const auth = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const SEGMENT_DURATION_MS = 6000; // 6 seconds per segment
+
+  /**
+   * Guards story contributions: unauthenticated visitors get the shared
+   * sign-in prompt instead of reaching the API.
+   */
+  const guardAction = useCallback(
+    async (action: () => void | Promise<void>) => {
+      if (auth.isAuthenticated) {
+        await action();
+        return true;
+      }
+      setIsAuthModalOpen(true);
+      return false;
+    },
+    [auth.isAuthenticated]
+  );
 
   // Load feed and find current active story
   useEffect(() => {
     async function loadStory() {
       setIsLoading(true);
+      setErrorMessage("");
+      setStory(null);
+      setCurrentIndex(0);
       try {
-        const feed = await api.getFeed(roomCode);
+        const [feed, preview] = await Promise.all([api.getFeed(roomCode), api.getRoomPreview(roomCode)]);
+        setTheme(preview.room.theme);
         if (feed.active_story && feed.active_story.id === storyId) {
           setStory(feed.active_story);
-        } else if (feed.active_story) {
-          setStory(feed.active_story);
+
         } else {
           setErrorMessage("Story not found or expired.");
         }
@@ -92,42 +117,57 @@ export default function ChainStoryViewer() {
     }
   };
 
+  const startStoryEntry = async (file: File) => {
+    await guardAction(async () => {
+      setIsUploading(true);
+      setErrorMessage("");
+      try {
+        const compressed = await validateAndCompressImage(file);
+        URL.revokeObjectURL(compressed.previewUrl);
+        const uploadRes = await api.uploadPhoto(compressed.file);
+        const authorName =
+          typeof auth.user?.user_metadata?.full_name === "string"
+            ? auth.user.user_metadata.full_name.trim()
+            : "";
+        const res = await api.addStoryEntry(story!.id, {
+          image_url: uploadRes.image_url,
+          cloudinary_public_id: uploadRes.cloudinary_public_id,
+          author_name: authorName,
+        });
+
+        setStory((prev) =>
+          prev
+            ? {
+                ...prev,
+                entries: [...prev.entries, res.entry],
+              }
+            : prev
+        );
+        setCurrentIndex(story!.entries.length);
+        setProgress(0);
+      } catch (err: any) {
+        setErrorMessage(err.message || "Failed to add story entry");
+      } finally {
+        setIsUploading(false);
+      }
+    });
+  };
+
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !story) return;
 
-    setIsUploading(true);
-    setErrorMessage("");
-    try {
-      const compressed = await validateAndCompressImage(file);
-      const uploadRes = await api.uploadPhoto(compressed.file);
-      const res = await api.addStoryEntry(story.id, {
-        image_url: uploadRes.image_url,
-        cloudinary_public_id: uploadRes.cloudinary_public_id,
-        author_name: "FestSquad",
-      });
-
-      setStory((prev) =>
-        prev
-          ? {
-              ...prev,
-              entries: [...prev.entries, res.entry],
-            }
-          : prev
-      );
-      setCurrentIndex(story.entries.length);
-      setProgress(0);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Failed to add story entry");
-    } finally {
-      setIsUploading(false);
+    const ok = await guardAction(() => startStoryEntry(file));
+    if (ok === false) {
+      // Blocked by the auth guard — allow the user to pick another file.
+      e.target.value = "";
     }
   };
 
   const currentEntry: StoryEntryDTO | undefined = story?.entries[currentIndex];
 
   return (
-    <ThemeWrapper themeKey="midnight-neon">
+    <ThemeWrapper themeKey={theme}>
       <div className="fixed inset-0 z-50 bg-black text-white flex flex-col select-none overflow-hidden">
         <input
           ref={fileInputRef}
@@ -137,18 +177,17 @@ export default function ChainStoryViewer() {
           onChange={handleAddPhoto}
         />
 
+        {errorMessage && <p role="alert" className="relative z-50 bg-red-950 p-3 text-center text-white">{errorMessage}</p>}
         {isLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <span className="material-symbols-outlined text-[36px] animate-spin text-primary">
-              progress_activity
-            </span>
+            <Icon name="progress_activity" size={36} className="animate-spin text-primary" />
             <span className="font-heading text-sm">Loading Chain Story...</span>
           </div>
-        ) : !story || story.entries.length === 0 ? (
+        ) : !story ? (
+          <Link className="m-auto underline" href={`/r/${roomCode}/wall`}>Return to Wall</Link>
+        ) : story.entries.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
-            <span className="material-symbols-outlined text-[48px] text-secondary">
-              auto_stories
-            </span>
+            <Icon name="auto_stories" size={48} className="text-secondary" />
             <h2 className="font-heading font-bold text-lg">No Story Moments Yet</h2>
             <p className="font-body text-xs text-white/70 max-w-xs">
               Be the first to ignite this chain story with a photo!
@@ -177,7 +216,7 @@ export default function ChainStoryViewer() {
                   src={currentEntry.image_url}
                   alt={`Story by ${currentEntry.author_name}`}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   priority
                 />
               )}
@@ -235,17 +274,11 @@ export default function ChainStoryViewer() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md">
-                    <span className="material-symbols-outlined text-[15px] text-tertiary">
-                      visibility
-                    </span>
-                    <span className="font-body text-xs font-semibold">348</span>
-                  </div>
                   <Link
                     href={`/r/${roomCode}/wall`}
                     className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white/90 hover:text-white flex items-center justify-center"
                   >
-                    <span className="material-symbols-outlined text-[20px]">close</span>
+                    <Icon name="close" size={20} />
                   </Link>
                 </div>
               </div>
@@ -259,7 +292,7 @@ export default function ChainStoryViewer() {
                 className="w-1/3 h-full cursor-pointer flex items-center justify-start pl-2 opacity-0 hover:opacity-100 transition-opacity"
               >
                 <div className="w-8 h-12 rounded-r-xl bg-black/50 backdrop-blur-sm flex items-center justify-center text-white">
-                  <span className="material-symbols-outlined text-[22px]">chevron_left</span>
+                  <Icon name="chevron_left" size={22} />
                 </div>
               </div>
 
@@ -278,7 +311,7 @@ export default function ChainStoryViewer() {
                 className="w-1/3 h-full cursor-pointer flex items-center justify-end pr-2 opacity-0 hover:opacity-100 transition-opacity"
               >
                 <div className="w-8 h-12 rounded-l-xl bg-black/50 backdrop-blur-sm flex items-center justify-center text-white">
-                  <span className="material-symbols-outlined text-[22px]">chevron_right</span>
+                  <Icon name="chevron_right" size={22} />
                 </div>
               </div>
             </div>
@@ -306,9 +339,7 @@ export default function ChainStoryViewer() {
                 disabled={isUploading}
                 className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-primary via-purple-600 to-secondary text-on-primary font-heading font-bold text-sm shadow-[0_0_24px_rgba(139,92,246,0.6)] flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-[20px]">
-                  {isUploading ? "progress_activity" : "add_a_photo"}
-                </span>
+                <Icon name={isUploading ? "progress_activity" : "add_a_photo"} size={20} />
                 <span>
                   {isUploading ? "Uploading entry..." : "Add Your Photo to this Chain Story"}
                 </span>
@@ -317,6 +348,12 @@ export default function ChainStoryViewer() {
           </div>
         )}
       </div>
+
+      {/* Shared auth prompt for unauthenticated story contributions */}
+      <AuthRequiredModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </ThemeWrapper>
   );
 }

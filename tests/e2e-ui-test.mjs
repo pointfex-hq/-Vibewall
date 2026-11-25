@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const BASE_URL = "http://localhost:3000";
-const SCREENSHOTS_DIR = "/home/jitu/Downloads/VibeWall/code/tests/screenshots";
+const SCREENSHOTS_DIR = "/home/jitu/Downloads/VibeWall/tests/screenshots";
 
 async function runUITests() {
   console.log("==================================================");
@@ -82,23 +82,64 @@ async function runUITests() {
     const statusBadge = await page.locator("text=Status: open").isVisible();
     logResult("Room Status Badge Open", statusBadge);
 
-    // Verify 1-Tap Entry / Join Button
-    const enterWallBtn = page.locator("button:has-text('Enter Live Social Wall')");
-    logResult("Enter Social Wall Button Visible", await enterWallBtn.isVisible());
+    // Verify the Guest Entry CTAs
+    const googleEntryBtn = page.locator("button:has-text('Continue with Google to Enter')");
+    const previewGuestBtn = page.locator("button:has-text('Preview as Read-Only Guest')");
+    logResult("Guest Can See Google Sign-In CTA", await googleEntryBtn.isVisible());
+    logResult("Guest Can See Preview as Read-Only CTA", await previewGuestBtn.isVisible());
+
+    // Guest preview must not navigate into the wall
+    await previewGuestBtn.click();
+    await page.waitForTimeout(300);
+    logResult("Guest Preview Stays on Entry Page", page.url().includes("/r/VIBE26"));
+
+    // Sign in through the primary CTA and enter the wall
+    await googleEntryBtn.click();
+    await page.waitForURL("**/r/VIBE26/wall", { timeout: 8000 });
+    logResult("Google Sign-In Enters the Live Wall", page.url().includes("/r/VIBE26/wall"));
 
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "2-qr-entry-gate.png") });
 
-    // Click Enter Wall -> redirects to /r/VIBE26/wall
-    await enterWallBtn.click();
-    await page.waitForURL("**/r/VIBE26/wall", { timeout: 8000 });
-    logResult("Auth Gate Redirects to /r/VIBE26/wall", page.url().includes("/r/VIBE26/wall"));
+    // ----------------------------------------------------
+    // AUTH REGRESSION (Mock Mode): Sign-in State, Sign-Out, Refresh Persistence
+    // ----------------------------------------------------
+    console.log("\n>>> Testing Auth: Mock Mode Sign-In / Sign-Out / Refresh");
+    await page.goto(`${BASE_URL}/`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1000);
+
+    // Suite 2 ended with a mock Google sign-in → visitor should be signed in.
+    const signOutBtnOnLanding = page.locator("button:has-text('Sign Out')");
+    logResult("Mock Signed-In State Shows Sign Out", await signOutBtnOnLanding.isVisible());
+
+    // Explicit sign-out clears the mock user and returns to the signed-out state.
+    await signOutBtnOnLanding.click();
+    await page.waitForTimeout(1200);
+    const mockUserAfterSignOut = await page.evaluate(() => localStorage.getItem("vibewall_mock_user"));
+    logResult("Mock Sign-Out Clears Mock User", mockUserAfterSignOut === null);
+    const hostSignInBtn = page.locator("button:has-text('Host Sign In')");
+    logResult("Mock Sign-Out Returns to Signed-Out State", await hostSignInBtn.isVisible());
+
+    // Refresh after sign-out must keep the user signed out (no auto re-login).
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    const hostSignInAfterRefresh = page.locator("button:has-text('Host Sign In')");
+    logResult("Mock Sign-Out Persists After Refresh", await hostSignInAfterRefresh.isVisible());
+    const mockUserAfterRefresh = await page.evaluate(() => localStorage.getItem("vibewall_mock_user"));
+    logResult("Mock State Cleared After Refresh", mockUserAfterRefresh === null);
 
     // ----------------------------------------------------
     // TEST SUITE 3: Route /r/[code]/wall (Live Social Wall)
     // ----------------------------------------------------
     console.log("\n>>> Testing Route 3: Live Social Wall (/r/VIBE26/wall)");
+    // Guest session: clear any mock sign-in stored earlier so the wall behaves as a guest.
+    await page.evaluate(() => localStorage.removeItem("vibewall_mock_user"));
     await page.goto(`${BASE_URL}/r/VIBE26/wall`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(800);
+    // Wait for the wall feed to finish loading (room title + feed content).
+    await page.waitForFunction(
+      () => document.querySelector("h1")?.textContent?.includes("Dynamic University Fest 2026"),
+      null,
+      { timeout: 8000 }
+    );
 
     // Verify Live Header & Code Copy
     const headerTitle = await page.textContent("h1");
@@ -130,14 +171,38 @@ async function runUITests() {
     const pinnedNote = await page.locator("text=Pinned Vibe Note").first().isVisible();
     logResult("Pinned Vibe Note Highlighted at Top", pinnedNote);
 
-    // Test Photo Card Like interaction
-    const firstLikeBtn = page.locator("article button:has(span:has-text('favorite'))").first();
+    // Guest Poll Vote — click shows the auth modal (shared guard with the like flow)
+    const pollOption = page.locator("button:has-text('Arijit Singh')").first();
+    if (await pollOption.isVisible() && !(await pollOption.isDisabled())) {
+      await pollOption.click();
+      await page.waitForTimeout(300);
+      const guestPollModal = await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible();
+      logResult("Guest Poll Vote Click Shows Auth Modal", guestPollModal);
+      await page.click("button:has-text('Continue with Google')");
+      await page.waitForTimeout(800);
+    }
+
+    // Test Photo Card Like interaction — guest gets the auth modal, then signs in
+    await page.waitForFunction(
+      () => document.querySelector("article button") !== null,
+      null,
+      { timeout: 8000 }
+    );
+    const firstLikeBtn = page.locator("article button:has(svg.lucide-heart)").first();
     if (await firstLikeBtn.isVisible()) {
-      const initialLikeText = await firstLikeBtn.textContent();
       await firstLikeBtn.click();
       await page.waitForTimeout(300);
+      const guestLikeModal = await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible();
+      logResult("Guest Like Click Shows Auth Modal", guestLikeModal);
+      // Continue with Google so the guest session is established
+      await page.click("button:has-text('Continue with Google')");
+      await page.waitForTimeout(800);
+      // Authenticated clicks work again
+      const afterSignInText = await firstLikeBtn.textContent();
+      await firstLikeBtn.click();
+      await page.waitForTimeout(400);
       const updatedLikeText = await firstLikeBtn.textContent();
-      logResult("Like Button Counter Interaction", true, `${initialLikeText?.trim()} -> ${updatedLikeText?.trim()}`);
+      logResult("Like Works After Google Sign-In", afterSignInText !== updatedLikeText, `${afterSignInText?.trim()} -> ${updatedLikeText?.trim()}`);
     }
 
     // Test VibeCard Exporter Modal
@@ -152,15 +217,15 @@ async function runUITests() {
     await page.click("button:has-text('Cancel')");
     await page.waitForTimeout(300);
 
-    // Test Floating Composer: Post a Vibe Note
+    // Test Floating Composer (authenticated after the like sign-in)
     await page.click("button:has-text('Write Note')");
-    await page.waitForTimeout(500);
+    await page.locator("textarea[placeholder*='Share a shoutout']").waitFor({ state: "visible", timeout: 8000 });
     const textarea = page.locator("textarea[placeholder*='Share a shoutout']");
     logResult("Floating Composer Opened", await textarea.isVisible());
+    logResult("Composer Shows Authenticated Identity", await page.locator("text=Posting as").first().isVisible());
 
     const testNoteText = "Automated E2E Test Note from Chromium: Sound stage is electric! #Fest26";
     await textarea.fill(testNoteText);
-    await page.fill("input[placeholder*='Anonymous or Rahat']", "QA_Robot_Jitu");
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "3-wall-composer-note.png") });
 
     await page.click("button:has-text('Post Vibe Note')");
@@ -170,6 +235,80 @@ async function runUITests() {
     const newNoteVisible = await page.locator(`text=${testNoteText}`).isVisible();
     logResult("New Vibe Note Live Feed Integration", newNoteVisible, "Broadcasted & displayed instantly");
 
+    // Poll Vote — while authenticated, clicking a poll option must not show the auth modal
+    const pollOption2 = page.locator("button:has-text('Arijit Singh')").first();
+    if (await pollOption2.isVisible()) {
+      await pollOption2.click().catch(() => {});
+      await page.waitForTimeout(300);
+      logResult("Poll Vote While Authenticated Skips Auth Modal", !(await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible()));
+    }
+
+    // Chain Story — StoryStrip → Add Photo uploads to the active story (not the feed)
+    const getStoryId = () =>
+      page.evaluate(() => {
+        const store = globalThis[Symbol.for("vibewall.mock.store")];
+        const story = [...(store?.stories?.values() || [])].find((s) => s.is_active);
+        return story ? story.id : null;
+      });
+    const getStoryEntries = (sid) =>
+      page.evaluate((storyId) => {
+        const store = globalThis[Symbol.for("vibewall.mock.store")];
+        const story = [...(store?.stories?.values() || [])].find((s) => s.id === storyId);
+        return story ? story.entries.length : -1;
+      }, sid);
+    const getPostCount = () => page.evaluate(() => globalThis[Symbol.for("vibewall.mock.store")]?.posts?.size || 0);
+
+    const storyId = await getStoryId();
+    const storyEntriesBefore = storyId ? await getStoryEntries(storyId) : -1;
+    const postsBeforeStoryUpload = await getPostCount();
+
+    const addPhotoBtn = page.locator("text=Add Photo").first();
+    if (storyId && (await addPhotoBtn.isVisible())) {
+      await addPhotoBtn.click();
+      await page.waitForTimeout(1000);
+      logResult("Story Add Photo Opens Composer", await page.locator("text=Add to Chain Story").isVisible());
+      logResult("Story Entry Mode Hides Frame Selector", !(await page.locator("text=Choose Frame Style").isVisible()));
+      const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1;
+        canvas.height = 1;
+        return canvas.toDataURL("image/png");
+      });
+      await page.setInputFiles("input[type=file]", {
+        name: "story-photo.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(png.split(",")[1], "base64"),
+      });
+      await page.locator("img[alt='Upload preview']").waitFor({ state: "visible", timeout: 8000 });
+      await page.click("button:has-text('Add to Chain Story')");
+      await page.waitForTimeout(1500);
+      const storyEntriesAfter = await getStoryEntries(storyId);
+      logResult("Story Upload Adds Entry To Chain Story", storyEntriesAfter === storyEntriesBefore + 1, `before=${storyEntriesBefore} after=${storyEntriesAfter}`);
+      logResult("Story Upload Does Not Post To Feed", (await getPostCount()) === postsBeforeStoryUpload);
+    }
+
+    // Standard Add Photo (bottom bar) still posts to the feed via api.createPost
+    const postsBeforeStandard = await getPostCount();
+    await page.click("button:has-text('Post Photo')");
+    await page.locator("text=Post Photo to Live Wall").waitFor({ state: "visible", timeout: 8000 });
+    const png2 = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      return canvas.toDataURL("image/png");
+    });
+    await page.setInputFiles("input[type=file]", {
+      name: "standard-photo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(png2.split(",")[1], "base64"),
+    });
+    await page.locator("img[alt='Upload preview']").waitFor({ state: "visible", timeout: 8000 });
+    logResult("Standard Mode Shows Frame Selector", await page.locator("text=Choose Frame Style").isVisible());
+    await page.click("button:has-text('Post Photo to Live Wall')");
+    await page.waitForTimeout(1500);
+    const postsAfterStandard = await getPostCount();
+    logResult("Standard Add Photo Still Posts To Feed", postsAfterStandard > postsBeforeStandard, `before=${postsBeforeStandard} after=${postsAfterStandard}`);
+
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "3-live-wall-full.png") });
 
     // ----------------------------------------------------
@@ -177,7 +316,12 @@ async function runUITests() {
     // ----------------------------------------------------
     console.log("\n>>> Testing Route 4: Chain Story Viewer (/r/VIBE26/story/story-fest-1)");
     await page.goto(`${BASE_URL}/r/VIBE26/story/story-fest-1`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(800);
+    // Wait for the story stage to finish loading.
+    await page.waitForFunction(
+      () => document.body.innerText.includes("Add Your Photo to this Chain Story"),
+      null,
+      { timeout: 8000 }
+    );
 
     // Verify 9:16 Fullscreen Immersive Stage
     const authorHeader = await page.locator("span:has-text('Murad FestCrew'), span:has-text('FestCrew'), span:has-text('Fest')").first().isVisible();

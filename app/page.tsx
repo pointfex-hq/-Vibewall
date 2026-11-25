@@ -6,9 +6,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ThemeKey } from "@/types/vibewall";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
+import { isMockMode } from "@/lib/config";
 import { api } from "@/lib/api";
 import { getCurrentUser, signInWithGoogle, signOut } from "@/lib/supabase";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import { Icon } from "@/components/icons";
 
 export default function LandingHostPortal() {
   const router = useRouter();
@@ -54,6 +56,7 @@ export default function LandingHostPortal() {
         theme: selectedTheme,
         expires_in_hours: expiresInHours,
       });
+      sessionStorage.setItem(`venue:${res.room.id}`, res.screen_url);
       router.push(`/host/${res.room.code}`);
     } catch (err: any) {
       setCreateError(err.message || "Failed to create room");
@@ -80,9 +83,7 @@ export default function LandingHostPortal() {
           <div className="max-w-6xl mx-auto h-16 px-4 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-primary via-purple-600 to-secondary flex items-center justify-center shadow-[0_0_16px_rgba(139,92,246,0.4)]">
-                <span className="material-symbols-outlined text-white text-[22px]">
-                  sensors
-                </span>
+                <Icon name="sensors" size={22} className="text-white" />
               </div>
               <div className="flex flex-col">
                 <span className="font-heading font-extrabold text-lg text-primary tracking-tight uppercase">
@@ -110,7 +111,7 @@ export default function LandingHostPortal() {
                   </div>
                   <button
                     onClick={handleAuth}
-                    className="hidden sm:inline-flex text-xs font-semibold text-on-surface-variant hover:text-on-surface px-2.5 py-1.5 rounded-lg border border-outline/50 hover:bg-surface-container-high transition-colors"
+                    className="inline-flex text-xs font-semibold text-on-surface-variant hover:text-on-surface px-2.5 py-1.5 rounded-lg border border-outline/50 hover:bg-surface-container-high transition-colors"
                   >
                     Sign Out
                   </button>
@@ -120,10 +121,8 @@ export default function LandingHostPortal() {
                   onClick={handleAuth}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-bold text-on-surface transition-all active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[16px] text-primary">
-                    login
-                  </span>
-                  <span>Host Sign In</span>
+                  <Icon name="login" size={16} className="text-primary" />
+                  <span>Continue with Google</span>
                 </button>
               )}
             </div>
@@ -158,7 +157,7 @@ export default function LandingHostPortal() {
                 onClick={() => setIsCreateOpen(true)}
                 className="w-full sm:flex-1 py-3 px-5 rounded-2xl font-heading font-bold text-sm bg-primary text-on-primary shadow-[0_0_24px_rgba(139,92,246,0.4)] hover:brightness-110 active:scale-95 flex items-center justify-center gap-2 transition-all"
               >
-                <span className="material-symbols-outlined text-[20px]">add_circle</span>
+                <Icon name="add_circle" size={20} />
                 <span>Create New Room</span>
               </button>
 
@@ -178,9 +177,7 @@ export default function LandingHostPortal() {
                   type="submit"
                   className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-primary-container/30 hover:bg-primary text-primary hover:text-on-primary flex items-center justify-center transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[18px]">
-                    arrow_forward
-                  </span>
+                  <Icon name="arrow_forward" size={18} />
                 </button>
               </form>
             </div>
@@ -193,10 +190,8 @@ export default function LandingHostPortal() {
           <div className="flex flex-col gap-4 mt-4">
             <div className="flex items-center justify-between border-b border-outline/30 pb-2">
               <h2 className="font-heading font-bold text-base sm:text-lg text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[20px]">
-                  bolt
-                </span>
-                <span>Active Public Rooms</span>
+                <Icon name="bolt" size={20} className="text-primary" />
+                <span>Event Rooms</span>
               </h2>
               <span className="font-body text-xs text-on-surface-variant">
                 Instant join via QR / Link
@@ -204,7 +199,7 @@ export default function LandingHostPortal() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Featured Room 1 */}
+              {isMockMode() && (
               <div className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4 hover:border-primary/50 transition-all group">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-col gap-1">
@@ -247,11 +242,12 @@ export default function LandingHostPortal() {
                     className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-semibold text-on-surface transition-all"
                     title="Open 16:9 Venue Display Screen"
                   >
-                    <span className="material-symbols-outlined text-[16px]">tv</span>
+                    <Icon name="tv" size={16} />
                   </Link>
                 </div>
               </div>
 
+              )}
               {/* Sample Theme Preview Showcase */}
               <div className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4">
                 <div className="flex flex-col gap-1">
@@ -298,7 +294,7 @@ export default function LandingHostPortal() {
               <div className="flex items-center justify-between border-b border-outline/30 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-primary-container/30 flex items-center justify-center text-primary">
-                    <span className="material-symbols-outlined text-[20px]">add</span>
+                    <Icon name="add" size={20} />
                   </div>
                   <h3 className="font-heading font-extrabold text-lg text-on-surface">
                     Create New Room
@@ -308,13 +304,13 @@ export default function LandingHostPortal() {
                   onClick={() => setIsCreateOpen(false)}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[20px]">close</span>
+                  <Icon name="close" size={20} />
                 </button>
               </div>
 
               {createError && (
                 <div className="p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs font-semibold flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[18px]">error</span>
+                  <Icon name="error" size={18} />
                   <span>{createError}</span>
                 </div>
               )}
@@ -412,16 +408,12 @@ export default function LandingHostPortal() {
                 >
                   {isCreating ? (
                     <>
-                      <span className="material-symbols-outlined text-[18px] animate-spin">
-                        progress_activity
-                      </span>
+                      <Icon name="progress_activity" size={18} className="animate-spin" />
                       <span>Creating Room...</span>
                     </>
                   ) : (
                     <>
-                      <span className="material-symbols-outlined text-[18px]">
-                        rocket_launch
-                      </span>
+                      <Icon name="rocket_launch" size={18} />
                       <span>Launch Room & Host Dashboard</span>
                     </>
                   )}

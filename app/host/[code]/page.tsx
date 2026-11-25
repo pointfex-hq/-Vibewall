@@ -10,13 +10,83 @@ import {
   PostDTO,
   NoteDTO,
   PollDTO,
+  RealtimeEventPayloads,
   RoomDTO,
   StoryDTO,
   ThemeKey,
 } from "@/types/vibewall";
 import { api } from "@/lib/api";
+import { subscribeToRoom } from "@/lib/supabase";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import { Icon } from "@/components/icons";
+
+/**
+ * Realtime sync helpers for the host dashboard (Section 6.3 — Realtime).
+ * All handlers use functional state updates so newer local state is never
+ * overwritten by stale event data, and new items are deduped by id.
+ */
+function applyNewPost(prev: FeedResponse, post: PostDTO): FeedResponse {
+  if (prev.posts.some((p) => p.id === post.id)) return prev;
+  return { ...prev, posts: [post, ...prev.posts] };
+}
+
+function applyNewNote(prev: FeedResponse, note: NoteDTO): FeedResponse {
+  if (
+    prev.pinned_notes.some((n) => n.id === note.id) ||
+    prev.notes.some((n) => n.id === note.id)
+  ) {
+    return prev;
+  }
+  if (note.is_pinned) {
+    return { ...prev, pinned_notes: [note, ...prev.pinned_notes.filter((n) => n.id !== note.id)] };
+  }
+  return { ...prev, notes: [note, ...prev.notes.filter((n) => n.id !== note.id)] };
+}
+
+function applyModeration(
+  prev: FeedResponse,
+  targetType: RealtimeEventPayloads["content_moderated"]["target_type"],
+  targetId: string,
+  action: RealtimeEventPayloads["content_moderated"]["action"]
+): FeedResponse {
+  if (targetType === "post") {
+    const posts = prev.posts.map((p) =>
+      p.id === targetId
+        ? { ...p, visibility: action === "hide" ? ("hidden" as const) : ("approved" as const) }
+        : p
+    );
+    if (action === "delete") {
+      return { ...prev, posts: posts.filter((p) => p.id !== targetId) };
+    }
+    return { ...prev, posts };
+  }
+  if (targetType === "note") {
+    if (action === "delete") {
+      return {
+        ...prev,
+        pinned_notes: prev.pinned_notes.filter((n) => n.id !== targetId),
+        notes: prev.notes.filter((n) => n.id !== targetId),
+      };
+    }
+    const applyToNote = (n: NoteDTO): NoteDTO => {
+      let updated = n;
+      if (action === "pin") updated = { ...updated, is_pinned: true };
+      if (action === "unpin") updated = { ...updated, is_pinned: false };
+      if (action === "hide" || action === "restore") {
+        updated = {
+          ...updated,
+          moderation_status: action === "hide" ? "hidden" : "approved",
+        };
+      }
+      return updated;
+    };
+    const pinned_notes = prev.pinned_notes.map((n) => (n.id === targetId ? applyToNote(n) : n));
+    const notes = prev.notes.map((n) => (n.id === targetId ? applyToNote(n) : n));
+    return { ...prev, pinned_notes, notes };
+  }
+  return prev;
+}
 
 export default function HostDashboardPage() {
   const params = useParams();
@@ -61,9 +131,8 @@ export default function HostDashboardPage() {
       setFeed(feedData);
 
       // Default venue screen URL
-      const defaultToken = "screen_token_vibe26_live";
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      setScreenUrl(`${origin}/screen/${defaultToken}`);
+      setScreenUrl(sessionStorage.getItem(`venue:${preview.room.id}`) || "");
 
       const qr = await QRCode.toDataURL(`${origin}/r/${roomCode}`, {
         width: 320,
@@ -81,6 +150,37 @@ export default function HostDashboardPage() {
   useEffect(() => {
     if (roomCode) loadData();
   }, [roomCode]);
+
+  // Realtime synchronization with the room (Section 6.3 — Realtime).
+  // Subscribes only after the room has loaded, cleans up on unmount/room change.
+  useEffect(() => {
+    if (!room?.id) return;
+
+    const unsubscribe = subscribeToRoom(room.id, {
+      onNewPost: ({ post }) => {
+        setFeed((prev) => applyNewPost(prev, post));
+      },
+      onNewNote: ({ note }) => {
+        setFeed((prev) => applyNewNote(prev, note));
+      },
+      onContentModerated: (payload) => {
+        setFeed((prev) =>
+          applyModeration(prev, payload.target_type, payload.target_id, payload.action)
+        );
+      },
+      onPollUpdated: ({ poll }) => {
+        // Mirror the live wall: poll_updated carries the authoritative active poll.
+        setFeed((prev) => ({ ...prev, active_poll: poll }));
+      },
+      onThemeUpdated: ({ theme }) => {
+        setRoom((prev) => (prev ? { ...prev, theme } : prev));
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [room?.id]);
 
   const showToast = (msg: string) => {
     setActionNotice(msg);
@@ -130,7 +230,10 @@ export default function HostDashboardPage() {
     if (!confirm("Rotate screen token? Existing projector displays will need the new link.")) return;
     try {
       const res = await api.updateRoom(room.code, { rotate_screen_token: true });
-      if (res.screen_url) setScreenUrl(res.screen_url);
+      if (res.screen_url) {
+        sessionStorage.setItem(`venue:${room.id}`, res.screen_url);
+        setScreenUrl(res.screen_url);
+      }
       showToast("Screen display token rotated successfully");
     } catch (err: any) {
       alert(err.message || "Failed to rotate token");
@@ -219,11 +322,11 @@ export default function HostDashboardPage() {
                 className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors"
                 title="View Live Wall"
               >
-                <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                <Icon name="arrow_back" size={20} />
               </Link>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                  <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+                  <Icon name="admin_panel_settings" size={18} />
                 </div>
                 <div className="flex flex-col">
                   <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
@@ -237,20 +340,20 @@ export default function HostDashboardPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Link
+              {screenUrl ? <Link
                 href={screenUrl}
                 target="_blank"
                 className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
               >
-                <span className="material-symbols-outlined text-[16px]">tv</span>
+                <Icon name="tv" size={16} />
                 <span>Open Venue Display</span>
-              </Link>
+              </Link> : <button onClick={handleRotateToken} className="rounded-full border px-3 py-1.5 text-xs">Generate projector link</button>}
 
               <button
                 onClick={() => copyToClipboard(window.location.origin + `/r/${roomCode}`, "Guest Invite URL")}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline text-xs font-semibold hover:bg-surface-container-highest"
               >
-                <span className="material-symbols-outlined text-[15px]">share</span>
+                <Icon name="share" size={15} />
                 <span className="hidden sm:inline">Invite Guests</span>
               </button>
             </div>
@@ -260,7 +363,7 @@ export default function HostDashboardPage() {
         {/* Action Toast Alert */}
         {actionNotice && (
           <div className="fixed top-18 right-4 z-50 p-3 rounded-xl bg-primary text-on-primary font-heading font-semibold text-xs shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-            <span className="material-symbols-outlined text-[18px]">check_circle</span>
+            <Icon name="check_circle" size={18} />
             <span>{actionNotice}</span>
           </div>
         )}
@@ -271,7 +374,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Room Status</span>
-                <span className="material-symbols-outlined text-primary text-[18px]">sensors</span>
+                <Icon name="sensors" size={18} className="text-primary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface capitalize">
@@ -284,7 +387,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Live Feed Items</span>
-                <span className="material-symbols-outlined text-tertiary text-[18px]">photo_library</span>
+                <Icon name="photo_library" size={18} className="text-tertiary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface">
@@ -299,7 +402,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Active Poll Votes</span>
-                <span className="material-symbols-outlined text-primary text-[18px]">how_to_vote</span>
+                <Icon name="how_to_vote" size={18} className="text-primary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface">
@@ -312,7 +415,7 @@ export default function HostDashboardPage() {
             <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
               <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
                 <span>Active Theme</span>
-                <span className="material-symbols-outlined text-secondary text-[18px]">palette</span>
+                <Icon name="palette" size={18} className="text-secondary" />
               </div>
               <div className="flex items-baseline justify-between mt-2">
                 <span className="font-heading font-extrabold text-base sm:text-lg text-on-surface truncate">
@@ -343,7 +446,7 @@ export default function HostDashboardPage() {
                     : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
                 }`}
               >
-                <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                <Icon name={tab.icon} size={16} />
                 <span>{tab.label}</span>
               </button>
             ))}
@@ -416,7 +519,7 @@ export default function HostDashboardPage() {
                             onClick={() => handleModerate("post", post.id, "hide")}
                             className="py-1.5 px-2 rounded-lg bg-warning/15 hover:bg-warning/25 text-warning font-semibold text-xs flex items-center justify-center gap-1"
                           >
-                            <span className="material-symbols-outlined text-[15px]">visibility_off</span>
+                            <Icon name="visibility_off" size={15} />
                             <span>Hide</span>
                           </button>
                         ) : (
@@ -424,7 +527,7 @@ export default function HostDashboardPage() {
                             onClick={() => handleModerate("post", post.id, "restore")}
                             className="py-1.5 px-2 rounded-lg bg-tertiary/15 hover:bg-tertiary/25 text-tertiary font-semibold text-xs flex items-center justify-center gap-1"
                           >
-                            <span className="material-symbols-outlined text-[15px]">restore</span>
+                            <Icon name="restore" size={15} />
                             <span>Restore</span>
                           </button>
                         )}
@@ -433,7 +536,7 @@ export default function HostDashboardPage() {
                           onClick={() => handleModerate("post", post.id, "delete")}
                           className="py-1.5 px-2 rounded-lg bg-danger/15 hover:bg-danger/25 text-danger font-semibold text-xs flex items-center justify-center gap-1"
                         >
-                          <span className="material-symbols-outlined text-[15px]">delete</span>
+                          <Icon name="delete" size={15} />
                           <span>Delete</span>
                         </button>
                       </div>
@@ -578,7 +681,7 @@ export default function HostDashboardPage() {
               {/* Create Poll */}
               <div className="p-5 rounded-2xl bg-surface-container border border-outline/50 flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-[20px]">how_to_vote</span>
+                  <Icon name="how_to_vote" size={20} className="text-primary" />
                   <h3 className="font-heading font-bold text-base text-on-surface">
                     Launch Interactive Poll
                   </h3>
@@ -645,7 +748,7 @@ export default function HostDashboardPage() {
               {/* Create Chain Story */}
               <div className="p-5 rounded-2xl bg-surface-container border border-outline/50 flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[20px]">auto_stories</span>
+                  <Icon name="auto_stories" size={20} className="text-secondary" />
                   <h3 className="font-heading font-bold text-base text-on-surface">
                     Create Chain Story Prompt
                   </h3>

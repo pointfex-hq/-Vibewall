@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -13,14 +13,17 @@ import {
   StoryDTO,
 } from "@/types/vibewall";
 import { api } from "@/lib/api";
-import { subscribeToRoom } from "@/lib/supabase";
+import { subscribeToRoom, getAuthState } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
 import PhotoCard from "@/components/PhotoCard";
 import NoteCard from "@/components/NoteCard";
 import PollCard from "@/components/PollCard";
 import StoryStrip from "@/components/StoryStrip";
-import ComposerModal from "@/components/ComposerModal";
+import ComposerModal, { ComposerMode } from "@/components/ComposerModal";
 import VibeCardModal from "@/components/VibeCardModal";
+import { Icon } from "@/components/icons";
 
 export default function LiveSocialWallPage() {
   const params = useParams();
@@ -39,11 +42,72 @@ export default function LiveSocialWallPage() {
   const [activeTab, setActiveTab] = useState<"all" | "photos" | "notes">("all");
   const [copiedToast, setCopiedToast] = useState(false);
 
+  // Optimistic like state owned by the wall; cards derive display from props
+  // (authoritative values) + this map while a like is in flight.
+  const [optimisticLikes, setOptimisticLikes] = useState<
+    Record<string, { liked: boolean; count: number }>
+  >({});
+  const likeInFlightRef = useRef<Set<string>>(new Set());
+  const pollInFlightRef = useRef<Set<string>>(new Set());
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const showActionNotice = (msg: string) => {
+    setActionNotice(msg);
+    setTimeout(() => setActionNotice(null), 2500);
+  };
+
+  // Authentication state + shared auth prompt guard
+  const auth = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const pendingActionRef = useRef<(() => void | Promise<void>) | null>(null);
+
+  /**
+   * Runs `action` only when the visitor is authenticated; otherwise opens
+   * the shared sign-in prompt so protected requests never hit the API
+   * while unauthenticated.
+   */
+  const guardAction = useCallback(
+    async (
+      action: () => void | Promise<void> | boolean | Promise<boolean>
+    ): Promise<boolean> => {
+      if (!auth.isReady) return false;
+      if (auth.isAuthenticated) {
+        const result = await action();
+        // Propagate the action outcome (e.g. optimistic rollback signals) upward.
+        return typeof result === "boolean" ? result : true;
+      }
+      pendingActionRef.current = action as () => void | Promise<void>;
+      setIsAuthModalOpen(true);
+      return false;
+    },
+    [auth.isReady, auth.isAuthenticated]
+  );
+
+  // Resumes the pending action after successful Google sign-in.
+  const handleAuthModalAuthenticated = useCallback(async () => {
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    if (action) {
+      const result = await action();
+      return typeof result === "boolean" ? result : true;
+    }
+    return true;
+  }, []);
+
   // Floating Composer & Modal states
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [composerDefaultTab, setComposerDefaultTab] = useState<"photo" | "note">("photo");
+  const [composerMode, setComposerMode] = useState<ComposerMode>("standard");
+  const [storyEntryId, setStoryEntryId] = useState<string | null>(null);
   const [photoCooldownRemaining, setPhotoCooldownRemaining] = useState(0);
   const [noteCooldownRemaining, setNoteCooldownRemaining] = useState(0);
+
+  // Reset composer session state (mode + story target) when closing.
+  const resetComposer = () => {
+    setIsComposerOpen(false);
+    setComposerMode("standard");
+    setStoryEntryId(null);
+  };
 
   // VibeCard Modal state
   const [selectedPostForVibeCard, setSelectedPostForVibeCard] = useState<PostDTO | null>(null);
@@ -177,20 +241,80 @@ export default function LiveSocialWallPage() {
     }
   };
 
-  const handlePostLike = async (postId: string) => {
+  // Get the authoritative base like state for a post or note.
+  const getLikeBase = (
+    targetType: "post" | "note",
+    targetId: string
+  ): { liked: boolean; count: number } => {
+    const findIn = (items: Array<PostDTO | NoteDTO>) =>
+      items.find((item) => item.id === targetId);
+    const base =
+      targetType === "post"
+        ? findIn(feed.posts)
+        : findIn([...feed.notes, ...feed.pinned_notes]);
+    return { liked: Boolean(base?.liked_by_me), count: base?.like_count || 0 };
+  };
+
+  // Shared optimistic like action used by photos and notes.
+  const runLikeAction = async (
+    targetType: "post" | "note",
+    targetId: string
+  ): Promise<boolean> => {
+    // Prevent duplicate requests while a like is in flight.
+    if (likeInFlightRef.current.has(targetId)) return false;
+    likeInFlightRef.current.add(targetId);
+
+    const base = getLikeBase(targetType, targetId);
+    const optimistic = {
+      liked: !base.liked,
+      count: base.liked ? Math.max(0, base.count - 1) : base.count + 1,
+    };
+    setOptimisticLikes((prev) => ({ ...prev, [targetId]: optimistic }));
+
     try {
-      await api.toggleLike("post", postId);
-    } catch (err) {
-      console.error("Like error:", err);
+      const res = await api.toggleLike(targetType, targetId);
+      // Reconcile with the authoritative response and update the feed.
+      setOptimisticLikes((prev) => {
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
+      });
+      setFeed((prev) => ({
+        ...prev,
+        posts:
+          targetType === "post"
+            ? prev.posts.map((p) =>
+                p.id === targetId ? { ...p, liked_by_me: res.liked, like_count: res.like_count } : p
+              )
+            : prev.posts,
+        pinned_notes: prev.pinned_notes.map((n) =>
+          n.id === targetId ? { ...n, liked_by_me: res.liked, like_count: res.like_count } : n
+        ),
+        notes: prev.notes.map((n) =>
+          n.id === targetId ? { ...n, liked_by_me: res.liked, like_count: res.like_count } : n
+        ),
+      }));
+      return true;
+    } catch (err: any) {
+      // Roll back the optimistic like; the cards fall back to authoritative props.
+      setOptimisticLikes((prev) => {
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
+      });
+      showActionNotice(err?.message || "Failed to update like. Please try again.");
+      return false;
+    } finally {
+      likeInFlightRef.current.delete(targetId);
     }
   };
 
-  const handleNoteLike = async (noteId: string) => {
-    try {
-      await api.toggleLike("note", noteId);
-    } catch (err) {
-      console.error("Like error:", err);
-    }
+  const handlePostLike = async (postId: string): Promise<boolean> => {
+    return guardAction(() => runLikeAction("post", postId));
+  };
+
+  const handleNoteLike = async (noteId: string): Promise<boolean> => {
+    return guardAction(() => runLikeAction("note", noteId));
   };
 
   const handleReportPost = async (postId: string) => {
@@ -222,42 +346,99 @@ export default function LiveSocialWallPage() {
     }
   };
 
-  const handlePollVote = async (optionId: string) => {
-    if (!feed.active_poll) return;
-    try {
-      const res = await api.votePoll(feed.active_poll.id, optionId);
-      setFeed((prev) => ({ ...prev, active_poll: res.poll }));
-    } catch (err) {
-      console.error("Vote error:", err);
-    }
+  const handlePollVote = async (optionId: string): Promise<boolean> => {
+    const poll = feed.active_poll;
+    if (!poll) return false;
+    // Prevent duplicate votes while a vote request is in flight.
+    if (pollInFlightRef.current.has(poll.id)) return false;
+    return guardAction(async () => {
+      pollInFlightRef.current.add(poll.id);
+      try {
+        const res = await api.votePoll(poll.id, optionId);
+        setFeed((prev) => ({ ...prev, active_poll: res.poll }));
+        return true;
+      } catch (err: any) {
+        if (err?.status === 401) {
+          const state = await getAuthState().catch(() => null);
+          if (!state?.isAuthenticated) {
+            showActionNotice("Please sign in to vote in this poll.");
+            return false;
+          }
+        }
+        showActionNotice(err?.message || "Failed to vote. Please try again.");
+        return false;
+      } finally {
+        pollInFlightRef.current.delete(poll.id);
+      }
+    });
   };
+
+  const authorName =
+    typeof auth.user?.user_metadata?.full_name === "string"
+      ? auth.user.user_metadata.full_name.trim()
+      : "";
+  const authorAvatar =
+    typeof auth.user?.user_metadata?.avatar_url === "string"
+      ? auth.user.user_metadata.avatar_url.trim()
+      : "";
 
   const handleSubmitPhoto = async (data: {
     file: File;
-    frameId: string;
-    authorName: string;
-  }) => {
-    const uploadRes = await api.uploadPhoto(data.file);
-    const postRes = await api.createPost(roomCode, {
-      image_url: uploadRes.image_url,
-      cloudinary_public_id: uploadRes.cloudinary_public_id,
-      frame_id: data.frameId,
-      author_name: data.authorName,
+    mode: ComposerMode;
+    frameId?: string;
+    storyId?: string;
+  }): Promise<boolean> => {
+    return guardAction(async () => {
+      if (data.mode === "story-entry") {
+        // Chain Story entry — never calls api.createPost().
+        const storyId = data.storyId ?? storyEntryId;
+        if (!storyId) {
+          // The Chain Story is unavailable — do not send an invalid request.
+          throw new Error("The Chain Story is no longer available. Try again from the wall.");
+        }
+        const uploadRes = await api.uploadPhoto(data.file);
+        const res = await api.addStoryEntry(storyId, {
+          image_url: uploadRes.image_url,
+          cloudinary_public_id: uploadRes.cloudinary_public_id,
+          author_name: authorName,
+        });
+        // Update the active story with the new entry (existing state conventions).
+        setFeed((prev) => {
+          const story = prev.active_story;
+          if (!story || story.id !== storyId) return prev;
+          const entries = [...story.entries, res.entry];
+          return { ...prev, active_story: { ...story, entries } };
+        });
+        return true;
+      }
+
+      // Standard feed photo upload (unchanged behavior).
+      const uploadRes = await api.uploadPhoto(data.file);
+      const postRes = await api.createPost(roomCode, {
+        image_url: uploadRes.image_url,
+        cloudinary_public_id: uploadRes.cloudinary_public_id,
+        frame_id: data.frameId || "classic",
+        author_name: authorName,
+        author_avatar: authorAvatar,
+      });
+      setFeed((prev) => ({
+        ...prev,
+        posts: [postRes.post, ...prev.posts.filter((p) => p.id !== postRes.post.id)],
+      }));
+      setPhotoCooldownRemaining(20);
+      return true;
     });
-    setFeed((prev) => ({
-      ...prev,
-      posts: [postRes.post, ...prev.posts.filter((p) => p.id !== postRes.post.id)],
-    }));
-    setPhotoCooldownRemaining(20);
   };
 
-  const handleSubmitNote = async (data: { body: string; authorName: string }) => {
-    const res = await api.createNote(roomCode, data.body, data.authorName);
-    setFeed((prev) => ({
-      ...prev,
-      notes: [res.note, ...prev.notes.filter((n) => n.id !== res.note.id)],
-    }));
-    setNoteCooldownRemaining(15);
+  const handleSubmitNote = async (data: { body: string }): Promise<boolean> => {
+    return guardAction(async () => {
+      const res = await api.createNote(roomCode, data.body, authorName);
+      setFeed((prev) => ({
+        ...prev,
+        notes: [res.note, ...prev.notes.filter((n) => n.id !== res.note.id)],
+      }));
+      setNoteCooldownRemaining(15);
+    });
   };
 
   return (
@@ -271,7 +452,7 @@ export default function LiveSocialWallPage() {
               className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
             >
               <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                <span className="material-symbols-outlined text-[18px]">sensors</span>
+                <Icon name="sensors" size={18} />
               </div>
               <div className="flex flex-col">
                 <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
@@ -290,9 +471,7 @@ export default function LiveSocialWallPage() {
                 title="Copy Room Invitation Code"
               >
                 <span>#{roomCode}</span>
-                <span className="material-symbols-outlined text-[15px]">
-                  {copiedToast ? "check" : "content_copy"}
-                </span>
+                <Icon name={copiedToast ? "check" : "content_copy"} size={15} />
               </button>
 
               <Link
@@ -300,7 +479,7 @@ export default function LiveSocialWallPage() {
                 className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
                 title="Host Admin Dashboard"
               >
-                <span className="material-symbols-outlined text-[20px]">tune</span>
+                <Icon name="tune" size={20} />
               </Link>
             </div>
           </div>
@@ -308,6 +487,17 @@ export default function LiveSocialWallPage() {
 
         {/* Main Feed Container */}
         <main className="max-w-2xl mx-auto w-full px-4 pt-4 flex flex-col gap-5">
+          {/* Action notice toast (errors from likes, votes, etc.) */}
+          {actionNotice && (
+            <div
+              role="status"
+              className="mx-auto max-w-md p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs font-semibold flex items-center gap-2 animate-in fade-in"
+            >
+              <Icon name="error" size={18} />
+              <span>{actionNotice}</span>
+            </div>
+          )}
+
           {/* 1. Event Hero Banner */}
           <section className="relative w-full rounded-2xl overflow-hidden bg-surface-container border border-outline shadow-xl">
             <div className="relative h-40 sm:h-48 w-full">
@@ -346,17 +536,15 @@ export default function LiveSocialWallPage() {
                 {room?.title || "Live Festival Wall"}
               </h1>
               <div className="flex items-center gap-1.5 text-on-surface-variant text-xs mt-0.5">
-                <span className="material-symbols-outlined text-[16px] text-primary">
-                  location_on
-                </span>
+                <Icon name="location_on" size={16} className="text-primary" />
                 <span>Central Auditorium • Synchronized Realtime</span>
               </div>
             </div>
           </section>
 
-          {/* 2. Interactive Poll (if active) */}
+          {/* 2. Interactive Poll (if active) — keyed by poll id so a new poll resets selection state */}
           {feed.active_poll && (
-            <PollCard poll={feed.active_poll} onVote={handlePollVote} />
+            <PollCard key={feed.active_poll.id} poll={feed.active_poll} onVote={handlePollVote} />
           )}
 
           {/* 3. Chain Story Strip (if active) */}
@@ -365,8 +553,13 @@ export default function LiveSocialWallPage() {
               story={feed.active_story}
               roomCode={roomCode}
               onAddEntry={() => {
-                setComposerDefaultTab("photo");
-                setIsComposerOpen(true);
+                void guardAction(() => {
+                  if (!feed.active_story) return;
+                  setComposerMode("story-entry");
+                  setStoryEntryId(feed.active_story.id);
+                  setComposerDefaultTab("photo");
+                  setIsComposerOpen(true);
+                });
               }}
             />
           )}
@@ -412,6 +605,7 @@ export default function LiveSocialWallPage() {
                 <NoteCard
                   key={note.id}
                   note={note}
+                  optimisticLike={optimisticLikes[note.id] || null}
                   onLikeToggle={handleNoteLike}
                   onReport={handleReportNote}
                 />
@@ -426,6 +620,7 @@ export default function LiveSocialWallPage() {
                 <PhotoCard
                   key={post.id}
                   post={post}
+                  optimisticLike={optimisticLikes[post.id] || null}
                   onLikeToggle={handlePostLike}
                   onReport={handleReportPost}
                   onExportCard={(p) => setSelectedPostForVibeCard(p)}
@@ -437,6 +632,7 @@ export default function LiveSocialWallPage() {
                 <NoteCard
                   key={note.id}
                   note={note}
+                  optimisticLike={optimisticLikes[note.id] || null}
                   onLikeToggle={handleNoteLike}
                   onReport={handleReportNote}
                 />
@@ -445,9 +641,7 @@ export default function LiveSocialWallPage() {
 
           {feed.posts.length === 0 && feed.notes.length === 0 && (
             <div className="py-16 text-center text-on-surface-variant flex flex-col items-center gap-3">
-              <span className="material-symbols-outlined text-[48px] text-primary/60">
-                photo_camera_back
-              </span>
+              <Icon name="photo_camera_back" size={48} className="text-primary/60" />
               <p className="font-heading font-semibold text-sm">
                 The wall is ready! Be the first to share a moment.
               </p>
@@ -460,23 +654,33 @@ export default function LiveSocialWallPage() {
           <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-center gap-3 pointer-events-auto">
             <button
               onClick={() => {
-                setComposerDefaultTab("photo");
-                setIsComposerOpen(true);
+                void guardAction(() => {
+                  setComposerMode("standard");
+                  setStoryEntryId(null);
+                  setComposerDefaultTab("photo");
+                  setIsComposerOpen(true);
+                });
               }}
+              disabled={!auth.isReady}
               className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-primary to-purple-600 text-on-primary font-heading font-bold text-xs sm:text-sm shadow-[0_0_24px_rgba(139,92,246,0.5)] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
             >
-              <span className="material-symbols-outlined text-[20px]">photo_camera</span>
+              <Icon name="photo_camera" size={20} />
               <span>Post Photo</span>
             </button>
 
             <button
               onClick={() => {
-                setComposerDefaultTab("note");
-                setIsComposerOpen(true);
+                void guardAction(() => {
+                  setComposerMode("standard");
+                  setStoryEntryId(null);
+                  setComposerDefaultTab("note");
+                  setIsComposerOpen(true);
+                });
               }}
+              disabled={!auth.isReady}
               className="flex-1 py-3 px-4 rounded-2xl bg-surface-container border border-outline text-on-surface hover:text-primary hover:border-primary font-heading font-bold text-xs sm:text-sm shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
-              <span className="material-symbols-outlined text-[20px]">edit_note</span>
+              <Icon name="edit_note" size={20} />
               <span>Write Note</span>
             </button>
           </div>
@@ -485,7 +689,9 @@ export default function LiveSocialWallPage() {
         {/* Floating Composer Modal */}
         <ComposerModal
           isOpen={isComposerOpen}
-          onClose={() => setIsComposerOpen(false)}
+          onClose={resetComposer}
+          mode={composerMode}
+          storyId={storyEntryId || undefined}
           defaultTab={composerDefaultTab}
           onSubmitPhoto={handleSubmitPhoto}
           onSubmitNote={handleSubmitNote}
@@ -500,6 +706,13 @@ export default function LiveSocialWallPage() {
           post={selectedPostForVibeCard}
           roomTitle={room?.title || "VibeWall Event"}
           roomCode={roomCode}
+        />
+
+        {/* Shared auth prompt for unauthenticated interactive actions */}
+        <AuthRequiredModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthenticated={handleAuthModalAuthenticated}
         />
       </div>
     </ThemeWrapper>

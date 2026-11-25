@@ -3,12 +3,25 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { validateAndCompressImage, CompressionResult } from "@/lib/upload/compress";
+import { useAuth } from "@/lib/auth";
+import { Icon } from "@/components/icons";
+
+export type ComposerMode = "standard" | "story-entry";
 
 interface ComposerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitPhoto: (data: { file: File; frameId: string; authorName: string }) => Promise<void>;
-  onSubmitNote: (data: { body: string; authorName: string }) => Promise<void>;
+  /** Returns false when the action is blocked by the auth guard. */
+  onSubmitPhoto: (data: {
+    file: File;
+    mode: ComposerMode;
+    frameId?: string;
+    storyId?: string;
+  }) => Promise<boolean | void>;
+  onSubmitNote: (data: { body: string }) => Promise<boolean | void>;
+  /** `story-entry` mode hides frame selection and submits via `api.addStoryEntry`. */
+  mode?: ComposerMode;
+  storyId?: string;
   defaultTab?: "photo" | "note";
   photoCooldownRemaining?: number;
   noteCooldownRemaining?: number;
@@ -19,10 +32,13 @@ export default function ComposerModal({
   onClose,
   onSubmitPhoto,
   onSubmitNote,
+  mode = "standard",
+  storyId,
   defaultTab = "photo",
   photoCooldownRemaining = 0,
   noteCooldownRemaining = 0,
 }: ComposerModalProps) {
+  const { user, isAuthenticated, isReady } = useAuth();
   const [activeTab, setActiveTab] = useState<"photo" | "note">(defaultTab);
 
   useEffect(() => {
@@ -33,16 +49,45 @@ export default function ComposerModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewResult, setPreviewResult] = useState<CompressionResult | null>(null);
   const [selectedFrame, setSelectedFrame] = useState<string>("classic");
-  const [photoAuthor, setPhotoAuthor] = useState("");
   const [isCompressing, setIsCompressing] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Note tab states
   const [noteBody, setNoteBody] = useState("");
-  const [noteAuthor, setNoteAuthor] = useState("");
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Authenticated Google identity — derived from the session, never user-entered.
+  const authorName: string =
+    typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
+  const authorAvatar: string =
+    typeof user?.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url.trim() : "";
+  const authorInitials = authorName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  // Reset transient photo state when the composer closes so a previous
+  // selection (frame, file) can never leak into a new session.
+  useEffect(() => {
+    if (!isOpen) {
+      setIsCompressing(false);
+      setSelectedFile(null);
+      setPreviewResult(null);
+      setSelectedFrame("classic");
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
+
+  const selection = useRef(0);
+  useEffect(() => () => { selection.current += 1; }, [isOpen]);
+  useEffect(() => () => {
+    if (previewResult) URL.revokeObjectURL(previewResult.previewUrl);
+  }, [previewResult]);
 
   if (!isOpen) return null;
 
@@ -51,15 +96,20 @@ export default function ComposerModal({
     if (!file) return;
 
     setErrorMessage(null);
+    const version = ++selection.current;
     setIsCompressing(true);
     try {
       const res = await validateAndCompressImage(file);
+      if (version !== selection.current) {
+        URL.revokeObjectURL(res.previewUrl);
+        return;
+      }
       setSelectedFile(res.file);
       setPreviewResult(res);
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to process image");
+      if (version === selection.current) setErrorMessage(err.message || "Failed to process image");
     } finally {
-      setIsCompressing(false);
+      if (version === selection.current) setIsCompressing(false);
     }
   };
 
@@ -70,11 +120,21 @@ export default function ComposerModal({
     setErrorMessage(null);
     setIsUploadingPhoto(true);
     try {
-      await onSubmitPhoto({
+      if (mode === "story-entry" && !storyId) {
+        // The Chain Story is unavailable — do not send an invalid request.
+        setErrorMessage("The Chain Story is no longer available. Try again from the wall.");
+        return;
+      }
+      const ok = await onSubmitPhoto({
         file: selectedFile,
+        mode,
         frameId: selectedFrame,
-        authorName: photoAuthor.trim() || "VibeGuest",
+        storyId,
       });
+      if (ok === false) {
+        // Blocked by the auth guard — keep the composer open for retry.
+        return;
+      }
       // Reset & close
       setSelectedFile(null);
       setPreviewResult(null);
@@ -98,10 +158,13 @@ export default function ComposerModal({
     setErrorMessage(null);
     setIsSubmittingNote(true);
     try {
-      await onSubmitNote({
+      const ok = await onSubmitNote({
         body: noteBody.trim(),
-        authorName: noteAuthor.trim() || "VibeGuest",
       });
+      if (ok === false) {
+        // Blocked by the auth guard — keep the composer open for retry.
+        return;
+      }
       setNoteBody("");
       onClose();
     } catch (err: any) {
@@ -123,7 +186,27 @@ export default function ComposerModal({
       <div className="relative w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-surface-container border border-outline/50 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header with Tabs */}
         <div className="flex items-center justify-between p-4 border-b border-outline/30 bg-surface-container-low">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {isAuthenticated && authorName && (
+              <div className="flex items-center gap-2 mr-2 min-w-0">
+                <div className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-primary/40 bg-surface-container-high shrink-0">
+                  {authorAvatar ? (
+                    <Image src={authorAvatar} alt={authorName} fill className="object-cover" sizes="32px" />
+                  ) : (
+                    <span className="absolute inset-0 flex items-center justify-center font-heading font-bold text-xs text-on-surface">
+                      {authorInitials || "?"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-body text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                    Posting as
+                  </span>
+                  <span className="font-heading font-bold text-xs text-on-surface truncate">{authorName}</span>
+                </div>
+                <Icon name="verified" size={14} className="text-primary shrink-0" />
+              </div>
+            )}
             <button
               onClick={() => {
                 setActiveTab("photo");
@@ -135,7 +218,7 @@ export default function ComposerModal({
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">photo_camera</span>
+              <Icon name="photo_camera" size={16} />
               <span>Post Photo</span>
             </button>
             <button
@@ -149,7 +232,7 @@ export default function ComposerModal({
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">chat</span>
+              <Icon name="chat" size={16} />
               <span>Vibe Note</span>
             </button>
           </div>
@@ -158,14 +241,14 @@ export default function ComposerModal({
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <Icon name="close" size={20} />
           </button>
         </div>
 
         {/* Error Alert */}
         {errorMessage && (
           <div className="mx-4 mt-3 p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs font-medium flex items-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">error</span>
+            <Icon name="error" size={18} />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -189,9 +272,7 @@ export default function ComposerModal({
                   className="w-full h-52 rounded-2xl border-2 border-dashed border-outline/60 hover:border-primary/80 bg-surface-container-lowest/50 flex flex-col items-center justify-center gap-2.5 cursor-pointer transition-all hover:bg-primary-container/10 group p-4 text-center"
                 >
                   <div className="w-14 h-14 rounded-full bg-primary-container/30 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                    <span className="material-symbols-outlined text-[28px]">
-                      {isCompressing ? "hourglass_empty" : "add_photo_alternate"}
-                    </span>
+                    <Icon name={isCompressing ? "hourglass_empty" : "add_photo_alternate"} size={28} />
                   </div>
                   <div className="flex flex-col items-center">
                     <span className="font-heading font-bold text-sm text-on-surface">
@@ -219,7 +300,7 @@ export default function ComposerModal({
                       }}
                       className="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1 hover:bg-black/90"
                     >
-                      <span className="material-symbols-outlined text-[14px]">refresh</span>
+                      <Icon name="refresh" size={14} />
                       Change
                     </button>
                     <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px]">
@@ -227,45 +308,32 @@ export default function ComposerModal({
                     </div>
                   </div>
 
-                  {/* Frame Selector */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                      Choose Frame Style
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {frames.map((frame) => (
-                        <button
-                          type="button"
-                          key={frame.id}
-                          onClick={() => setSelectedFrame(frame.id)}
-                          className={`p-2 rounded-xl text-xs font-semibold border text-center transition-all ${
-                            selectedFrame === frame.id
-                              ? `bg-primary/20 text-primary border-primary ${frame.color}`
-                              : "border-outline/40 text-on-surface-variant hover:text-on-surface"
-                          }`}
-                        >
-                          {frame.name}
-                        </button>
-                      ))}
+                  {/* Frame Selector — hidden in story-entry mode */}
+                  {mode !== "story-entry" && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="font-heading font-semibold text-xs text-on-surface-variant">
+                        Choose Frame Style
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {frames.map((frame) => (
+                          <button
+                            type="button"
+                            key={frame.id}
+                            onClick={() => setSelectedFrame(frame.id)}
+                            className={`p-2 rounded-xl text-xs font-semibold border text-center transition-all ${
+                              selectedFrame === frame.id
+                                ? `bg-primary/20 text-primary border-primary ${frame.color}`
+                                : "border-outline/40 text-on-surface-variant hover:text-on-surface"
+                            }`}
+                          >
+                            {frame.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
-
-              {/* Author Name */}
-              <div className="flex flex-col gap-1">
-                <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                  Your Display Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Ayesha or @squad26"
-                  value={photoAuthor}
-                  onChange={(e) => setPhotoAuthor(e.target.value)}
-                  maxLength={40}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container-lowest border border-outline/50 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                />
-              </div>
 
               {/* Submit Photo Button */}
               <button
@@ -275,16 +343,19 @@ export default function ComposerModal({
               >
                 {isUploadingPhoto ? (
                   <>
-                    <span className="material-symbols-outlined text-[18px] animate-spin">
-                      progress_activity
-                    </span>
-                    <span>Posting to live wall...</span>
+                    <Icon name="progress_activity" size={18} className="animate-spin" />
+                    <span>{mode === "story-entry" ? "Adding entry..." : "Posting to live wall..."}</span>
+                  </>
+                ) : mode === "story-entry" ? (
+                  <>
+                    <Icon name="add_a_photo" size={18} />
+                    <span>Add to Chain Story</span>
                   </>
                 ) : photoCooldownRemaining > 0 ? (
                   <span>Cooldown: wait {photoCooldownRemaining}s</span>
                 ) : (
                   <>
-                    <span className="material-symbols-outlined text-[18px]">publish</span>
+                    <Icon name="publish" size={18} />
                     <span>Post Photo to Live Wall</span>
                   </>
                 )}
@@ -296,7 +367,7 @@ export default function ComposerModal({
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                    Your Vibe Note / Confession
+                    Your Vibe Note
                   </label>
                   <span
                     className={`font-body text-xs font-semibold ${
@@ -317,21 +388,6 @@ export default function ComposerModal({
                 />
               </div>
 
-              {/* Author Name */}
-              <div className="flex flex-col gap-1">
-                <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                  Author Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Anonymous or Rahat"
-                  value={noteAuthor}
-                  onChange={(e) => setNoteAuthor(e.target.value)}
-                  maxLength={40}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container-lowest border border-outline/50 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
               {/* Submit Note Button */}
               <button
                 type="submit"
@@ -340,16 +396,14 @@ export default function ComposerModal({
               >
                 {isSubmittingNote ? (
                   <>
-                    <span className="material-symbols-outlined text-[18px] animate-spin">
-                      progress_activity
-                    </span>
+                    <Icon name="progress_activity" size={18} className="animate-spin" />
                     <span>Broadcasting note...</span>
                   </>
                 ) : noteCooldownRemaining > 0 ? (
                   <span>Cooldown: wait {noteCooldownRemaining}s</span>
                 ) : (
                   <>
-                    <span className="material-symbols-outlined text-[18px]">send</span>
+                    <Icon name="send" size={18} />
                     <span>Post Vibe Note</span>
                   </>
                 )}

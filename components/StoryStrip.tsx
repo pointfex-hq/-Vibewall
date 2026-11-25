@@ -4,6 +4,7 @@ import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { StoryDTO } from "@/types/vibewall";
+import { Icon } from "@/components/icons";
 
 interface StoryStripProps {
   story: StoryDTO | null;
@@ -23,9 +24,7 @@ export default function StoryStrip({
       {/* Story Prompt Title */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="material-symbols-outlined text-secondary text-[20px] shrink-0">
-            auto_stories
-          </span>
+          <Icon name="auto_stories" size={20} className="text-secondary shrink-0" />
           <span className="font-heading font-bold text-xs uppercase tracking-wider text-secondary truncate">
             CHAIN STORY • {story.entries.length} MOMENTS
           </span>
@@ -35,7 +34,7 @@ export default function StoryStrip({
           className="text-xs font-semibold text-primary hover:underline flex items-center gap-0.5 shrink-0"
         >
           <span>Watch</span>
-          <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+          <Icon name="arrow_forward" size={14} />
         </Link>
       </div>
 
@@ -52,9 +51,7 @@ export default function StoryStrip({
           title="Add photo to this chain story"
         >
           <div className="w-14 h-14 rounded-full border-2 border-dashed border-primary/60 flex items-center justify-center bg-primary-container/20 group-hover:border-primary group-hover:bg-primary-container/40 transition-all">
-            <span className="material-symbols-outlined text-primary text-[24px]">
-              add_a_photo
-            </span>
+            <Icon name="add_a_photo" size={24} className="text-primary" />
           </div>
           <span className="font-body text-[11px] text-primary font-semibold">
             Add Photo

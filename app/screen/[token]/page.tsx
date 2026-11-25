@@ -8,6 +8,7 @@ import { ScreenResponse, RoomDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { subscribeToRoom } from "@/lib/supabase";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import { Icon } from "@/components/icons";
 
 export default function VenueDisplayPage() {
   const params = useParams();
@@ -17,11 +18,14 @@ export default function VenueDisplayPage() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   // Load initial screen data
   useEffect(() => {
     async function loadScreen() {
+      setIsLoading(true);
+      setLoadError("");
       try {
         const data = await api.getScreenData(screenToken);
         setScreenData(data);
@@ -30,15 +34,15 @@ export default function VenueDisplayPage() {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const qr = await QRCode.toDataURL(`${origin}/r/${data.room.code}`, {
           width: 380,
-          margin: 1,
+          margin: 4,
           color: {
-            dark: "#FAFAFA",
-            light: "#00000000",
+            dark: "#171717",
+            light: "#FFFFFF",
           },
         });
         setQrCodeDataUrl(qr);
       } catch (err) {
-        console.error("Venue screen load failed:", err);
+        setLoadError(err instanceof Error ? err.message : "Venue display unavailable");
       } finally {
         setIsLoading(false);
       }
@@ -170,12 +174,11 @@ export default function VenueDisplayPage() {
     }
   };
 
+  if (loadError) return <main role="alert" className="p-8">{loadError}. Ask the host for the current projector link.</main>;
   if (isLoading || !screenData) {
     return (
       <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center gap-3">
-        <span className="material-symbols-outlined text-[48px] animate-spin text-primary">
-          progress_activity
-        </span>
+        <Icon name="progress_activity" size={48} className="animate-spin text-primary" />
         <span className="font-heading font-extrabold text-xl tracking-wider">
           Connecting Venue Display...
         </span>
@@ -194,9 +197,7 @@ export default function VenueDisplayPage() {
         <header className="flex items-center justify-between pb-4 border-b border-outline/30 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary via-purple-600 to-secondary flex items-center justify-center shadow-[0_0_24px_rgba(139,92,246,0.5)]">
-              <span className="material-symbols-outlined text-white text-[28px]">
-                sensors
-              </span>
+              <Icon name="sensors" size={28} className="text-white" />
             </div>
             <div className="flex flex-col">
               <span className="font-heading font-extrabold text-2xl text-on-surface tracking-tight">
@@ -223,7 +224,7 @@ export default function VenueDisplayPage() {
               className="w-11 h-11 rounded-2xl bg-surface-container border border-outline text-on-surface hover:text-primary flex items-center justify-center transition-colors"
               title="Toggle Fullscreen"
             >
-              <span className="material-symbols-outlined text-[24px]">fullscreen</span>
+              <Icon name="fullscreen" size={24} />
             </button>
           </div>
         </header>
@@ -267,16 +268,14 @@ export default function VenueDisplayPage() {
                   </div>
 
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-secondary font-bold text-sm">
-                    <span className="material-symbols-outlined text-[20px] fill">favorite</span>
+                    <Icon name="favorite" size={20} className="fill" filled />
                     <span>{currentPhoto.like_count}</span>
                   </div>
                 </div>
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-on-surface-variant gap-2">
-                <span className="material-symbols-outlined text-[64px] text-primary/40">
-                  photo_camera
-                </span>
+                <Icon name="photo_camera" size={64} className="text-primary/40" />
                 <span className="font-heading font-bold text-lg">
                   Scan QR to drop the first fest photo!
                 </span>
@@ -314,7 +313,7 @@ export default function VenueDisplayPage() {
             {screenData.pinned_notes.length > 0 && (
               <div className="rounded-3xl bg-surface-container border border-primary/50 p-4 shadow-xl flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-primary">
-                  <span className="material-symbols-outlined fill text-[18px]">push_pin</span>
+                  <Icon name="push_pin" size={18} className="fill" filled />
                   <span className="font-heading font-bold text-xs uppercase tracking-wider">
                     Pinned Announcement
                   </span>
@@ -333,7 +332,7 @@ export default function VenueDisplayPage() {
               <div className="flex-1 rounded-3xl bg-surface-container border border-outline/50 p-4 shadow-xl flex flex-col justify-between gap-3 overflow-hidden">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-tertiary">
-                    <span className="material-symbols-outlined text-[18px]">how_to_vote</span>
+                    <Icon name="how_to_vote" size={18} />
                     <span className="font-heading font-bold text-xs uppercase tracking-wider">
                       Live Poll • {poll.total_votes} Votes
                     </span>

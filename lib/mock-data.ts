@@ -21,6 +21,23 @@ export interface MockStore {
 const globalKey = Symbol.for("vibewall.mock.store");
 const globalScope = globalThis as unknown as { [globalKey]?: MockStore };
 
+// Resolves the author identity from the authenticated mock session
+// (localStorage-backed mock user). Never falls back to a fabricated identity.
+function resolveMockAuthor(): { author_name: string; author_avatar?: string } {
+  let authorName = "";
+  let authorAvatar: string | undefined;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("vibewall_mock_user");
+      const parsed = raw ? JSON.parse(raw) : null;
+      const meta = parsed?.user_metadata;
+      if (typeof meta?.full_name === "string") authorName = meta.full_name.trim();
+      if (typeof meta?.avatar_url === "string") authorAvatar = meta.avatar_url.trim();
+    } catch {}
+  }
+  return { author_name: authorName, author_avatar: authorAvatar };
+}
+
 function initSeedStore(): MockStore {
   const rooms = new Map<string, RoomDTO & { screen_token: string; owner_id: string }>();
   const posts = new Map<string, PostDTO & { room_code: string; report_count: number }>();
@@ -307,8 +324,8 @@ export const mockDB = {
       id,
       image_url: data.image_url,
       frame_id: data.frame_id || "classic",
-      author_name: data.author_name || "VibeGuest",
-      author_avatar: data.author_avatar || "/assets/stylized_modern_digital_vector_portrait_illustration_of_a_cheerful_young_south.png",
+      author_name: data.author_name || resolveMockAuthor().author_name,
+      author_avatar: data.author_avatar || resolveMockAuthor().author_avatar || "/assets/stylized_modern_digital_vector_portrait_illustration_of_a_cheerful_young_south.png",
       like_count: 0,
       liked_by_me: false,
       visibility: "approved",
@@ -321,7 +338,7 @@ export const mockDB = {
     return post;
   },
 
-  createNote(code: string, body: string, authorName = "VibeGuest") {
+  createNote(code: string, body: string, authorName?: string) {
     const store = getMockStore();
     const cleanCode = code.toUpperCase();
     const room = store.rooms.get(cleanCode);
@@ -329,7 +346,7 @@ export const mockDB = {
     const note: NoteDTO & { room_code: string; report_count: number } = {
       id,
       body: body.trim(),
-      author_name: authorName,
+      author_name: authorName || resolveMockAuthor().author_name,
       is_pinned: false,
       like_count: 0,
       liked_by_me: false,
@@ -415,7 +432,7 @@ export const mockDB = {
     return story;
   },
 
-  addStoryEntry(storyId: string, imageUrl: string, authorName = "VibeParticipant") {
+  addStoryEntry(storyId: string, imageUrl: string, authorName?: string) {
     const store = getMockStore();
     const story = store.stories.get(storyId);
     if (!story || !story.is_active) return null;
@@ -423,7 +440,7 @@ export const mockDB = {
     const entry = {
       id: "entry-" + Date.now(),
       image_url: imageUrl,
-      author_name: authorName,
+      author_name: authorName || resolveMockAuthor().author_name,
       sequence_order: story.entries.length + 1,
       created_at: new Date().toISOString(),
     };
