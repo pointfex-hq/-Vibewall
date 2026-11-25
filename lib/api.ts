@@ -41,15 +41,21 @@ async function getAuthHeader(): Promise<HeadersInit> {
   return headers;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function requestResponse(path: string, options: RequestInit = {}): Promise<Response> {
   const headers = await getAuthHeader();
-  const res = await fetch(path, {
+  const send = (authHeaders: HeadersInit) => fetch(path, {
     ...options,
     headers: {
-      ...headers,
+      ...authHeaders,
       ...(options.headers || {}),
     },
   });
+
+  let res = await send(headers);
+  if (res.status === 401 && new Headers(headers).has("Authorization")) {
+    const { data } = await supabase.auth.refreshSession();
+    if (data.session) res = await send({ ...headers, Authorization: `Bearer ${data.session.access_token}` });
+  }
 
   if (!res.ok) {
     let errorJson: any = null;
@@ -63,6 +69,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw err;
   }
 
+  return res;
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await requestResponse(path, options);
   return (await res.json()) as T;
 }
 
@@ -302,19 +313,24 @@ export const api = {
   },
 
   // 16. POST /api/cloudinary/sign
-  async getSignSignature(folder = "vibewall"): Promise<SignResponse> {
+  async getSignSignature(folder = "vibewall"): Promise<SignResponse & { uploadParams: Record<string, string | number> }> {
     if (USE_MOCK) {
       return {
         signature: "mock_signature_" + Date.now(),
         timestamp: Math.floor(Date.now() / 1000),
         cloud_name: "demo",
         api_key: "mock_api_key",
+        uploadParams: {},
       };
     }
-    return request<SignResponse>("/api/cloudinary/sign", {
+    const response = await requestResponse("/api/cloudinary/sign", {
       method: "POST",
       body: JSON.stringify({ folder }),
     });
+    const params = response.headers.get("X-VibeWall-Upload-Params");
+    if (!params) throw new Error("Missing signed upload parameters");
+    const signed: SignResponse = await response.json();
+    return { ...signed, uploadParams: JSON.parse(params) };
   },
 
   // Direct Cloudinary Upload workflow
@@ -333,9 +349,10 @@ export const api = {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("api_key", signData.api_key);
-    formData.append("timestamp", String(signData.timestamp));
     formData.append("signature", signData.signature);
-    formData.append("folder", "vibewall");
+    for (const [key, value] of Object.entries(signData.uploadParams)) {
+      formData.append(key, String(value));
+    }
 
     const cloudRes = await fetch(
       `https://api.cloudinary.com/v1_1/${signData.cloud_name}/image/upload`,

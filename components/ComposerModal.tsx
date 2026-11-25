@@ -75,12 +75,19 @@ export default function ComposerModal({
   // selection (frame, file) can never leak into a new session.
   useEffect(() => {
     if (!isOpen) {
+      setIsCompressing(false);
       setSelectedFile(null);
       setPreviewResult(null);
       setSelectedFrame("classic");
       setErrorMessage(null);
     }
   }, [isOpen]);
+
+  const selection = useRef(0);
+  useEffect(() => () => { selection.current += 1; }, [isOpen]);
+  useEffect(() => () => {
+    if (previewResult) URL.revokeObjectURL(previewResult.previewUrl);
+  }, [previewResult]);
 
   if (!isOpen) return null;
 
@@ -89,15 +96,20 @@ export default function ComposerModal({
     if (!file) return;
 
     setErrorMessage(null);
+    const version = ++selection.current;
     setIsCompressing(true);
     try {
       const res = await validateAndCompressImage(file);
+      if (version !== selection.current) {
+        URL.revokeObjectURL(res.previewUrl);
+        return;
+      }
       setSelectedFile(res.file);
       setPreviewResult(res);
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to process image");
+      if (version === selection.current) setErrorMessage(err.message || "Failed to process image");
     } finally {
-      setIsCompressing(false);
+      if (version === selection.current) setIsCompressing(false);
     }
   };
 
@@ -355,7 +367,7 @@ export default function ComposerModal({
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                    Your Vibe Note / Confession
+                    Your Vibe Note
                   </label>
                   <span
                     className={`font-body text-xs font-semibold ${

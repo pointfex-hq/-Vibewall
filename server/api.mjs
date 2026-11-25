@@ -61,7 +61,7 @@ async function run(sql, route, b, actor, url, headers) {
   if (!uid && !["preview", "screen"].includes(action))
     fail(401, "Sign in with Google", "UNAUTHORIZED");
   await sql`set local search_path = wall,public`;
-  if (actor)
+  if (actor && !["preview", "feed", "screen"].includes(action))
     await sql`insert into users(id,provider_subject,display_name,avatar_url,email) values(${uid},${actor.sub},${actor.name},${actor.avatar},${actor.email}) on conflict(id) do update set display_name=excluded.display_name,avatar_url=excluded.avatar_url,email=excluded.email`;
   if (action === "create") {
     const title = string(b.title, 200),
@@ -133,7 +133,7 @@ async function run(sql, route, b, actor, url, headers) {
     lookup =
       action === "screen"
         ? sql`screen_token_hash=${hash(key)}`
-        : sql`code=${key}`;
+        : sql`code=${key.toUpperCase()}`;
   const write = !["screen", "preview", "feed"].includes(action);
   const [room] =
     await sql`select * from rooms where ${lookup} ${write ? sql`for update` : sql``}`;
@@ -160,6 +160,10 @@ async function run(sql, route, b, actor, url, headers) {
     return feed(sql, room.id, uid, hidden, false);
   }
   if (action === "join") {
+    if (!membership) {
+      const [members] = await sql`select count(*)::int n from room_members where room_id=${room.id}`;
+      if (members.n >= 150) fail(409, "Room is full");
+    }
     await sql`insert into room_members(room_id,user_id) values(${room.id},${uid}) on conflict do nothing`;
     return { joined: true, room: dto };
   }
@@ -204,7 +208,7 @@ async function run(sql, route, b, actor, url, headers) {
     }
     const [item] = await items(sql, action, room.id, uid, false, row.id);
     const result = { [action]: item };
-    await emit(sql, room.id, "new_" + action, result);
+    await emit(sql, room.id, "new_" + action, { [action]: { ...item, liked_by_me: false } });
     return result;
   }
   if (action === "story") {

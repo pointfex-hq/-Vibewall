@@ -18,11 +18,14 @@ export default function VenueDisplayPage() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   // Load initial screen data
   useEffect(() => {
     async function loadScreen() {
+      setIsLoading(true);
+      setLoadError("");
       try {
         const data = await api.getScreenData(screenToken);
         setScreenData(data);
@@ -31,15 +34,15 @@ export default function VenueDisplayPage() {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const qr = await QRCode.toDataURL(`${origin}/r/${data.room.code}`, {
           width: 380,
-          margin: 1,
+          margin: 4,
           color: {
-            dark: "#FAFAFA",
-            light: "#00000000",
+            dark: "#171717",
+            light: "#FFFFFF",
           },
         });
         setQrCodeDataUrl(qr);
       } catch (err) {
-        console.error("Venue screen load failed:", err);
+        setLoadError(err instanceof Error ? err.message : "Venue display unavailable");
       } finally {
         setIsLoading(false);
       }
@@ -171,6 +174,7 @@ export default function VenueDisplayPage() {
     }
   };
 
+  if (loadError) return <main role="alert" className="p-8">{loadError}. Ask the host for the current projector link.</main>;
   if (isLoading || !screenData) {
     return (
       <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center gap-3">

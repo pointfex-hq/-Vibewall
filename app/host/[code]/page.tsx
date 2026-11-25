@@ -131,9 +131,8 @@ export default function HostDashboardPage() {
       setFeed(feedData);
 
       // Default venue screen URL
-      const defaultToken = "screen_token_vibe26_live";
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      setScreenUrl(`${origin}/screen/${defaultToken}`);
+      setScreenUrl(sessionStorage.getItem(`venue:${preview.room.id}`) || "");
 
       const qr = await QRCode.toDataURL(`${origin}/r/${roomCode}`, {
         width: 320,
@@ -231,7 +230,10 @@ export default function HostDashboardPage() {
     if (!confirm("Rotate screen token? Existing projector displays will need the new link.")) return;
     try {
       const res = await api.updateRoom(room.code, { rotate_screen_token: true });
-      if (res.screen_url) setScreenUrl(res.screen_url);
+      if (res.screen_url) {
+        sessionStorage.setItem(`venue:${room.id}`, res.screen_url);
+        setScreenUrl(res.screen_url);
+      }
       showToast("Screen display token rotated successfully");
     } catch (err: any) {
       alert(err.message || "Failed to rotate token");
@@ -338,14 +340,14 @@ export default function HostDashboardPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Link
+              {screenUrl ? <Link
                 href={screenUrl}
                 target="_blank"
                 className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
               >
                 <Icon name="tv" size={16} />
                 <span>Open Venue Display</span>
-              </Link>
+              </Link> : <button onClick={handleRotateToken} className="rounded-full border px-3 py-1.5 text-xs">Generate projector link</button>}
 
               <button
                 onClick={() => copyToClipboard(window.location.origin + `/r/${roomCode}`, "Guest Invite URL")}

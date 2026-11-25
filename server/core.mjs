@@ -76,15 +76,17 @@ export async function identity(req) {
   }
   const user = await res.json();
   const google = user.identities?.find((i) => i.provider === "google");
-  if (!google) fail(401, "Google identity required", "UNAUTHORIZED");
+  const profile = google?.identity_data;
+  const subject = profile?.sub || google?.id;
+  if (!subject) fail(401, "Google identity required", "UNAUTHORIZED");
   return {
     id: user.id,
-    sub: google.identity_data.sub,
+    sub: subject,
     name:
-      google.identity_data.full_name ||
-      google.identity_data.name ||
+      profile?.full_name ||
+      profile?.name ||
       "Participant",
-    avatar: google.identity_data.avatar_url || null,
+    avatar: profile?.avatar_url || null,
     email: user.email || null,
   };
 }
