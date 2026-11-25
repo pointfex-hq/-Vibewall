@@ -128,6 +128,7 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | Optimistic Like Rollback | IMPLEMENTED | `components/PhotoCard.tsx`, `components/NoteCard.tsx`, `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Auth Mode Unification | IMPLEMENTED | `lib/config.ts` (new), `lib/supabase.ts`, `lib/api.ts` | VERIFIED |
 | Mock Session Sign-Out & Refresh | IMPLEMENTED | `lib/supabase.ts`, `tests/e2e-ui-test.mjs` | VERIFIED |
+| Authenticated Google Identity in Composer | IMPLEMENTED | `components/ComposerModal.tsx`, `app/r/[code]/wall/page.tsx`, `app/r/[code]/story/[storyId]/page.tsx`, `lib/mock-data.ts`, `lib/api.ts` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
 | Vibe Notes & Pinning | IMPLEMENTED | `components/NoteCard.tsx` | VERIFIED |
 | Interactive Polls | IMPLEMENTED | `components/PollCard.tsx` | VERIFIED |
@@ -262,6 +263,7 @@ Commands:
 - Mock API error contract (Section 17) verified — mock-mode error responses include `error.code` + `error.message`.
 - Poll state reset, optimistic vote rollback, and like-state synchronization (Section 20) implemented and verified — new polls no longer inherit stale voted state; failed vote/like requests roll back optimistically; photo/note like state derives from authoritative feed props with parent-managed optimistic overrides.
 - Auth mode unification and mock/real session-state fixes (Section 21) implemented and verified — shared `isMockMode()`/`isSupabaseConfigured()` config, explicit mock precedence, no fake identities when unconfigured, mock sign-out + refresh persistence.
+- Authenticated Google identity in composer (Section 22) implemented and verified — custom author inputs removed; composer displays session-derived identity ("Posting as …") with avatar + verified badge; mock creators derive author from mock session.
 
 ---
 
@@ -606,6 +608,40 @@ E2E additions (`tests/e2e-ui-test.mjs`, Suite 2 auth regression):
 - `npx tsc --noEmit` → PASSED (0 errors).
 - `npm run build` → PASSED (`Compiled successfully`).
 - E2E suite → **TOTAL: 51 — PASSED: 51 — FAILED: 0 — SUCCESS RATE: 100%**.
+
+Remaining issues: none.
+
+---
+
+## 22. Authenticated Google Identity in Composer (Playbook v2.1 §1.4, §2 — F-06)
+
+**Task:** Remove manual author inputs and display the authenticated Google identity in the composer.
+
+### 22.1 Implemented behavior
+
+- `components/ComposerModal.tsx`:
+  - Removed `photoAuthor` / `noteAuthor` local state, inputs, resets, and submit-payload author fields.
+  - Added `useAuth()`-derived identity: `authorName` (from `user.user_metadata.full_name`), `authorAvatar` (from `user.user_metadata.avatar_url`), initials fallback.
+  - Composer header renders compact identity section: avatar (or initials fallback), **"Posting as [Full Name]"**, verified badge — only when authenticated with a display name.
+- `app/r/[code]/wall/page.tsx`:
+  - `handleSubmitPhoto` / `handleSubmitNote` no longer accept author names from the composer; they pass the authenticated identity (`auth.user.user_metadata`) into `api.createPost` / `api.addStoryEntry` / `api.createNote`.
+- `app/r/[code]/story/[storyId]/page.tsx`:
+  - Story entry submit now derives author from the authenticated session instead of hardcoded `"FestSquad"`.
+- `lib/mock-data.ts`:
+  - Added `resolveMockAuthor()` (mock-session localStorage user); removed fabricated defaults (`"VibeGuest"`, `"VibeParticipant"`) from mock post/note/story-entry creation.
+
+### 22.2 Files Modified
+
+- `components/ComposerModal.tsx`, `app/r/[code]/wall/page.tsx`, `app/r/[code]/story/[storyId]/page.tsx`, `lib/mock-data.ts`, `lib/api.ts`, `tests/e2e-ui-test.mjs`, `PROJECT_CONTEXT.md`.
+
+### 22.3 Testing
+
+E2E: `Composer Shows Authenticated Identity` added and passing; full suite → **TOTAL: 52 — PASSED: 52 — FAILED: 0 — SUCCESS RATE: 100%**.
+
+### 22.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
 
 Remaining issues: none.
 
