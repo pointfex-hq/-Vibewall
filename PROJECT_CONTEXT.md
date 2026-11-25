@@ -126,6 +126,8 @@ The CSS variable system dynamically changes the entire visual tone on all routes
 | Offline Icons (Lucide) | IMPLEMENTED | `components/icons.tsx` (new), 13 app/component files, `app/layout.tsx`, `app/globals.css` | VERIFIED |
 | Poll State Reset & Realtime Sync | IMPLEMENTED | `components/PollCard.tsx`, `app/r/[code]/wall/page.tsx` | VERIFIED |
 | Optimistic Like Rollback | IMPLEMENTED | `components/PhotoCard.tsx`, `components/NoteCard.tsx`, `app/r/[code]/wall/page.tsx` | VERIFIED |
+| Auth Mode Unification | IMPLEMENTED | `lib/config.ts` (new), `lib/supabase.ts`, `lib/api.ts` | VERIFIED |
+| Mock Session Sign-Out & Refresh | IMPLEMENTED | `lib/supabase.ts`, `tests/e2e-ui-test.mjs` | VERIFIED |
 | Photo Feed & Frames | IMPLEMENTED | `components/PhotoCard.tsx` | VERIFIED |
 | Vibe Notes & Pinning | IMPLEMENTED | `components/NoteCard.tsx` | VERIFIED |
 | Interactive Polls | IMPLEMENTED | `components/PollCard.tsx` | VERIFIED |
@@ -259,6 +261,7 @@ Commands:
 - All application source files are in `code/`. Stitch design files in `stitch_vibewall/` are untouched.
 - Mock API error contract (Section 17) verified — mock-mode error responses include `error.code` + `error.message`.
 - Poll state reset, optimistic vote rollback, and like-state synchronization (Section 20) implemented and verified — new polls no longer inherit stale voted state; failed vote/like requests roll back optimistically; photo/note like state derives from authoritative feed props with parent-managed optimistic overrides.
+- Auth mode unification and mock/real session-state fixes (Section 21) implemented and verified — shared `isMockMode()`/`isSupabaseConfigured()` config, explicit mock precedence, no fake identities when unconfigured, mock sign-out + refresh persistence.
 
 ---
 
@@ -561,3 +564,49 @@ Remaining issues: none.
 - `PROJECT_CONTEXT.md` — Section 20 + tracker rows.
 
 Remaining issues: none.
+
+---
+
+## 21. Auth Mode Unification & Mock/Real Session-State Fixes (Playbook v2.1 §1.1, §8)
+
+**Task:** Unify mock and Supabase authentication modes and fix session-state bugs.
+
+### 21.1 Shared Mock-Mode Detection Helper (Fixed)
+
+- New `lib/config.ts` — single source of truth:
+  - `isMockMode(): boolean` → `process.env.NEXT_PUBLIC_USE_MOCK === "true"` (explicit mock overrides real credentials).
+  - `isSupabaseConfigured(): boolean` → valid, non-empty, non-placeholder Supabase URL + anon key.
+  - `getAuthMode(): "mock" | "supabase" | "unconfigured"` → mock > supabase > unconfigured precedence.
+  - `isDemoHostEnabled()` / `getDemoHostUser()` → explicit demo-host opt-in only.
+- `lib/supabase.ts` and `lib/api.ts` both consume the shared helpers (no raw env comparisons in feature modules).
+
+### 21.2 Mock vs. Real Supabase Behavior (Fixed)
+
+- Mock mode (`NEXT_PUBLIC_USE_MOCK=true`): `signInWithGoogle` uses the mock user flow; API calls use `mockDB`; UI uses mock auth state.
+- Real mode (mock off + valid credentials): real Google OAuth via Supabase; real sessions; API attaches Supabase access token (`getAuthHeader` gates on real mode).
+- Unconfigured (mock off + missing/placeholder credentials): no fake authenticated user; safe guest behavior.
+
+### 21.3 Stale Mock User / Sign-Out Fixes (Fixed)
+
+- `getCurrentUser` / `getAuthState` resolve via `getAuthMode()`: mock → stored mock user (or explicit demo host) / null; supabase → Supabase session; unconfigured → null.
+- Removed automatic hardcoded `"guest-host-user"` fallback from normal session restoration (explicit opt-in only via `NEXT_PUBLIC_VIBEWALL_DEMO_HOST`).
+- `signOut` clears mock user and, in real mode, signs out of Supabase.
+
+### 21.4 Files Modified
+
+- `lib/config.ts` (new), `lib/supabase.ts`, `lib/api.ts`, `.env.example`, `.env.local` (demo-host opt-in), `tests/e2e-ui-test.mjs`, `PROJECT_CONTEXT.md`.
+
+### 21.5 Testing
+
+E2E additions (`tests/e2e-ui-test.mjs`, Suite 2 auth regression):
+- Mock Signed-In State Shows Sign Out, Mock Sign-Out Clears Mock User, Mock Sign-Out Returns to Signed-Out State, Mock Sign-Out Persists After Refresh, Mock State Cleared After Refresh.
+
+### 21.6 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- E2E suite → **TOTAL: 51 — PASSED: 51 — FAILED: 0 — SUCCESS RATE: 100%**.
+
+Remaining issues: none.
+
+---

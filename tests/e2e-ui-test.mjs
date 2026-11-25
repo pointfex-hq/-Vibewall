@@ -101,6 +101,33 @@ async function runUITests() {
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "2-qr-entry-gate.png") });
 
     // ----------------------------------------------------
+    // AUTH REGRESSION (Mock Mode): Sign-in State, Sign-Out, Refresh Persistence
+    // ----------------------------------------------------
+    console.log("\n>>> Testing Auth: Mock Mode Sign-In / Sign-Out / Refresh");
+    await page.goto(`${BASE_URL}/`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1000);
+
+    // Suite 2 ended with a mock Google sign-in → visitor should be signed in.
+    const signOutBtnOnLanding = page.locator("button:has-text('Sign Out')");
+    logResult("Mock Signed-In State Shows Sign Out", await signOutBtnOnLanding.isVisible());
+
+    // Explicit sign-out clears the mock user and returns to the signed-out state.
+    await signOutBtnOnLanding.click();
+    await page.waitForTimeout(1200);
+    const mockUserAfterSignOut = await page.evaluate(() => localStorage.getItem("vibewall_mock_user"));
+    logResult("Mock Sign-Out Clears Mock User", mockUserAfterSignOut === null);
+    const hostSignInBtn = page.locator("button:has-text('Host Sign In')");
+    logResult("Mock Sign-Out Returns to Signed-Out State", await hostSignInBtn.isVisible());
+
+    // Refresh after sign-out must keep the user signed out (no auto re-login).
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    const hostSignInAfterRefresh = page.locator("button:has-text('Host Sign In')");
+    logResult("Mock Sign-Out Persists After Refresh", await hostSignInAfterRefresh.isVisible());
+    const mockUserAfterRefresh = await page.evaluate(() => localStorage.getItem("vibewall_mock_user"));
+    logResult("Mock State Cleared After Refresh", mockUserAfterRefresh === null);
+
+    // ----------------------------------------------------
     // TEST SUITE 3: Route /r/[code]/wall (Live Social Wall)
     // ----------------------------------------------------
     console.log("\n>>> Testing Route 3: Live Social Wall (/r/VIBE26/wall)");

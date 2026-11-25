@@ -1,12 +1,20 @@
 import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 import { RealtimeEventPayloads } from "@/types/vibewall";
+import {
+  PLACEHOLDER_SUPABASE_URL,
+  PLACEHOLDER_SUPABASE_ANON_KEY,
+  isMockMode,
+  isSupabaseConfigured,
+  isDemoHostEnabled,
+  getAuthMode,
+  getDemoHostUser,
+} from "@/lib/config";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
+// Re-exported for existing consumers of the shared auth-mode helpers.
+export { isMockMode, isSupabaseConfigured, getAuthMode };
 
-export const isSupabaseConfigured =
-  supabaseUrl !== "https://placeholder-project.supabase.co" &&
-  supabaseAnonKey !== "placeholder-anon-key";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || PLACEHOLDER_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || PLACEHOLDER_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -16,9 +24,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export async function signInWithGoogle(redirectTo?: string) {
-  if (!isSupabaseConfigured) {
-    // Mock login in development/demo mode
+export async function signInWithGoogle(
+  redirectTo?: string
+): Promise<{ data: any; error: any }> {
+  if (isMockMode()) {
+    // Mock login flow (explicitly enabled via NEXT_PUBLIC_USE_MOCK=true).
     if (typeof window !== "undefined") {
       const mockUser = {
         id: "mock-user-jitu-" + Math.random().toString(36).substring(2, 8),
@@ -34,6 +44,12 @@ export async function signInWithGoogle(redirectTo?: string) {
       }
       return { data: { user: mockUser }, error: null };
     }
+    return { data: { user: null }, error: { message: "Mock sign-in is only available in the browser." } };
+  }
+
+  if (!isSupabaseConfigured()) {
+    // Never fabricate an identity when real Supabase auth is not configured.
+    return { data: { user: null }, error: { message: "Authentication is not configured." } };
   }
 
   return await supabase.auth.signInWithOAuth({
@@ -48,35 +64,41 @@ export async function signOut() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("vibewall_mock_user");
   }
-  if (!isSupabaseConfigured) {
-    return { error: null };
+  if (getAuthMode() === "supabase") {
+    // Real Supabase mode: clear the actual Supabase session.
+    return await supabase.auth.signOut();
   }
-  return await supabase.auth.signOut();
+  // Mock (or unconfigured) mode: mock user cleared above; stay signed out.
+  return { error: null };
 }
 
 export async function getCurrentUser() {
-  if (typeof window !== "undefined") {
-    const mockUserJson = localStorage.getItem("vibewall_mock_user");
-    if (mockUserJson) {
-      try {
-        return JSON.parse(mockUserJson);
-      } catch {}
+  const mode = getAuthMode();
+  if (mode === "mock") {
+    if (typeof window !== "undefined") {
+      const mockUserJson = localStorage.getItem("vibewall_mock_user");
+      if (mockUserJson) {
+        try {
+          const user = JSON.parse(mockUserJson);
+          if (user && typeof user.id === "string" && user.id) {
+            return user;
+          }
+        } catch {}
+      }
+      if (isDemoHostEnabled()) {
+        // Explicit opt-in demo host identity; never granted implicitly.
+        return getDemoHostUser();
+      }
     }
+    // Mock mode without a stored mock user → signed out (no fake host login).
+    return null;
   }
-
-  if (!isSupabaseConfigured) {
-    return {
-      id: "guest-host-user",
-      email: "host@vibewall.app",
-      user_metadata: {
-        full_name: "Jihadul Islam Jitu (Host)",
-        avatar_url: "/assets/stylized_modern_digital_vector_portrait_illustration_of_a_charismatic_south.png",
-      },
-    };
+  if (mode === "supabase") {
+    const { data } = await supabase.auth.getUser();
+    return data?.user ?? null;
   }
-
-  const { data } = await supabase.auth.getUser();
-  return data?.user ?? null;
+  // Real mode unavailable → never fabricate a fake authenticated user.
+  return null;
 }
 
 export interface AuthStateResult {
@@ -86,29 +108,37 @@ export interface AuthStateResult {
 
 /**
  * Returns the current authentication state used by the interactive flows:
- * a valid signed-in user in real mode, or the persisted mock user when a
- * sign-in has completed in mock/offline mode. Visitors who have not signed
- * in are reported as unauthenticated so they can only browse.
+ * a valid signed-in user in real Supabase mode, or the persisted mock user
+ * when mock mode has been explicitly enabled and a sign-in completed. Visitors
+ * who have not signed in are reported as unauthenticated so they can only
+ * browse. When no identity is available, the visitor is simply signed out.
  */
 export async function getAuthState(): Promise<AuthStateResult> {
-  if (typeof window !== "undefined") {
-    const mockUserJson = localStorage.getItem("vibewall_mock_user");
-    if (mockUserJson) {
-      try {
-        const user = JSON.parse(mockUserJson);
-        if (user && typeof user.id === "string" && user.id) {
-          return { user, isAuthenticated: true };
-        }
-      } catch {}
+  const mode = getAuthMode();
+  if (mode === "mock") {
+    if (typeof window !== "undefined") {
+      const mockUserJson = localStorage.getItem("vibewall_mock_user");
+      if (mockUserJson) {
+        try {
+          const user = JSON.parse(mockUserJson);
+          if (user && typeof user.id === "string" && user.id) {
+            return { user, isAuthenticated: true };
+          }
+        } catch {}
+      }
+      if (isDemoHostEnabled()) {
+        // Explicit opt-in demo host identity; never granted implicitly.
+        return { user: getDemoHostUser(), isAuthenticated: true };
+      }
     }
+    // Mock mode with no stored mock user = guest.
+    return { user: null, isAuthenticated: false };
   }
-
-  if (isSupabaseConfigured) {
+  if (mode === "supabase") {
     const { data } = await supabase.auth.getUser();
     return { user: data?.user ?? null, isAuthenticated: Boolean(data?.user) };
   }
-
-  // Mock / offline mode without a completed sign-in = guest.
+  // Unconfigured → signed out; no fake authentication.
   return { user: null, isAuthenticated: false };
 }
 
@@ -121,7 +151,7 @@ export interface RealtimeHandlers {
 }
 
 export function subscribeToRoom(roomId: string, handlers: RealtimeHandlers): () => void {
-  if (!isSupabaseConfigured || !roomId) {
+  if (isMockMode() || !isSupabaseConfigured() || !roomId) {
     // In mock/offline mode, listen to window custom events so local actions synchronize instantly
     if (typeof window !== "undefined") {
       const listener = (event: CustomEvent<{ room_id: string; type: string; payload: any }>) => {
