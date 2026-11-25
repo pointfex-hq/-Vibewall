@@ -373,9 +373,17 @@ export default function LiveSocialWallPage() {
     });
   };
 
+  const authorName =
+    typeof auth.user?.user_metadata?.full_name === "string"
+      ? auth.user.user_metadata.full_name.trim()
+      : "";
+  const authorAvatar =
+    typeof auth.user?.user_metadata?.avatar_url === "string"
+      ? auth.user.user_metadata.avatar_url.trim()
+      : "";
+
   const handleSubmitPhoto = async (data: {
     file: File;
-    authorName: string;
     mode: ComposerMode;
     frameId?: string;
     storyId?: string;
@@ -392,7 +400,7 @@ export default function LiveSocialWallPage() {
         const res = await api.addStoryEntry(storyId, {
           image_url: uploadRes.image_url,
           cloudinary_public_id: uploadRes.cloudinary_public_id,
-          author_name: data.authorName || "FestSquad",
+          author_name: authorName,
         });
         // Update the active story with the new entry (existing state conventions).
         setFeed((prev) => {
@@ -410,7 +418,8 @@ export default function LiveSocialWallPage() {
         image_url: uploadRes.image_url,
         cloudinary_public_id: uploadRes.cloudinary_public_id,
         frame_id: data.frameId || "classic",
-        author_name: data.authorName,
+        author_name: authorName,
+        author_avatar: authorAvatar,
       });
       setFeed((prev) => ({
         ...prev,
@@ -421,12 +430,9 @@ export default function LiveSocialWallPage() {
     });
   };
 
-  const handleSubmitNote = async (data: {
-    body: string;
-    authorName: string;
-  }): Promise<boolean> => {
+  const handleSubmitNote = async (data: { body: string }): Promise<boolean> => {
     return guardAction(async () => {
-      const res = await api.createNote(roomCode, data.body, data.authorName);
+      const res = await api.createNote(roomCode, data.body, authorName);
       setFeed((prev) => ({
         ...prev,
         notes: [res.note, ...prev.notes.filter((n) => n.id !== res.note.id)],

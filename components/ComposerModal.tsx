@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { validateAndCompressImage, CompressionResult } from "@/lib/upload/compress";
+import { useAuth } from "@/lib/auth";
 import { Icon } from "@/components/icons";
 
 export type ComposerMode = "standard" | "story-entry";
@@ -13,12 +14,11 @@ interface ComposerModalProps {
   /** Returns false when the action is blocked by the auth guard. */
   onSubmitPhoto: (data: {
     file: File;
-    authorName: string;
     mode: ComposerMode;
     frameId?: string;
     storyId?: string;
   }) => Promise<boolean | void>;
-  onSubmitNote: (data: { body: string; authorName: string }) => Promise<boolean | void>;
+  onSubmitNote: (data: { body: string }) => Promise<boolean | void>;
   /** `story-entry` mode hides frame selection and submits via `api.addStoryEntry`. */
   mode?: ComposerMode;
   storyId?: string;
@@ -38,6 +38,7 @@ export default function ComposerModal({
   photoCooldownRemaining = 0,
   noteCooldownRemaining = 0,
 }: ComposerModalProps) {
+  const { user, isAuthenticated, isReady } = useAuth();
   const [activeTab, setActiveTab] = useState<"photo" | "note">(defaultTab);
 
   useEffect(() => {
@@ -48,16 +49,27 @@ export default function ComposerModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewResult, setPreviewResult] = useState<CompressionResult | null>(null);
   const [selectedFrame, setSelectedFrame] = useState<string>("classic");
-  const [photoAuthor, setPhotoAuthor] = useState("");
   const [isCompressing, setIsCompressing] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Note tab states
   const [noteBody, setNoteBody] = useState("");
-  const [noteAuthor, setNoteAuthor] = useState("");
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Authenticated Google identity — derived from the session, never user-entered.
+  const authorName: string =
+    typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
+  const authorAvatar: string =
+    typeof user?.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url.trim() : "";
+  const authorInitials = authorName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   // Reset transient photo state when the composer closes so a previous
   // selection (frame, file) can never leak into a new session.
@@ -66,7 +78,6 @@ export default function ComposerModal({
       setSelectedFile(null);
       setPreviewResult(null);
       setSelectedFrame("classic");
-      setPhotoAuthor("");
       setErrorMessage(null);
     }
   }, [isOpen]);
@@ -104,7 +115,6 @@ export default function ComposerModal({
       }
       const ok = await onSubmitPhoto({
         file: selectedFile,
-        authorName: photoAuthor.trim() || "VibeGuest",
         mode,
         frameId: selectedFrame,
         storyId,
@@ -138,7 +148,6 @@ export default function ComposerModal({
     try {
       const ok = await onSubmitNote({
         body: noteBody.trim(),
-        authorName: noteAuthor.trim() || "VibeGuest",
       });
       if (ok === false) {
         // Blocked by the auth guard — keep the composer open for retry.
@@ -165,7 +174,27 @@ export default function ComposerModal({
       <div className="relative w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-surface-container border border-outline/50 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header with Tabs */}
         <div className="flex items-center justify-between p-4 border-b border-outline/30 bg-surface-container-low">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {isAuthenticated && authorName && (
+              <div className="flex items-center gap-2 mr-2 min-w-0">
+                <div className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-primary/40 bg-surface-container-high shrink-0">
+                  {authorAvatar ? (
+                    <Image src={authorAvatar} alt={authorName} fill className="object-cover" sizes="32px" />
+                  ) : (
+                    <span className="absolute inset-0 flex items-center justify-center font-heading font-bold text-xs text-on-surface">
+                      {authorInitials || "?"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-body text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                    Posting as
+                  </span>
+                  <span className="font-heading font-bold text-xs text-on-surface truncate">{authorName}</span>
+                </div>
+                <Icon name="verified" size={14} className="text-primary shrink-0" />
+              </div>
+            )}
             <button
               onClick={() => {
                 setActiveTab("photo");
@@ -294,21 +323,6 @@ export default function ComposerModal({
                 </div>
               )}
 
-              {/* Author Name */}
-              <div className="flex flex-col gap-1">
-                <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                  Your Display Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Ayesha or @squad26"
-                  value={photoAuthor}
-                  onChange={(e) => setPhotoAuthor(e.target.value)}
-                  maxLength={40}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container-lowest border border-outline/50 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
               {/* Submit Photo Button */}
               <button
                 type="submit"
@@ -359,21 +373,6 @@ export default function ComposerModal({
                   maxLength={280}
                   required
                   className="w-full p-3.5 rounded-xl bg-surface-container-lowest border border-outline/50 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-none"
-                />
-              </div>
-
-              {/* Author Name */}
-              <div className="flex flex-col gap-1">
-                <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                  Author Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Anonymous or Rahat"
-                  value={noteAuthor}
-                  onChange={(e) => setNoteAuthor(e.target.value)}
-                  maxLength={40}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container-lowest border border-outline/50 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
 

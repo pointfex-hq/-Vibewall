@@ -174,6 +174,7 @@ export const api = {
       cloudinary_public_id: string;
       frame_id?: string;
       author_name?: string;
+      author_avatar?: string;
     }
   ): Promise<{ post: PostDTO }> {
     if (USE_MOCK) {

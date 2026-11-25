@@ -120,10 +120,14 @@ export default function ChainStoryViewer() {
       try {
         const compressed = await validateAndCompressImage(file);
         const uploadRes = await api.uploadPhoto(compressed.file);
+        const authorName =
+          typeof auth.user?.user_metadata?.full_name === "string"
+            ? auth.user.user_metadata.full_name.trim()
+            : "";
         const res = await api.addStoryEntry(story!.id, {
           image_url: uploadRes.image_url,
           cloudinary_public_id: uploadRes.cloudinary_public_id,
-          author_name: "FestSquad",
+          author_name: authorName,
         });
 
         setStory((prev) =>

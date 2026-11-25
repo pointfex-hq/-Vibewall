@@ -222,10 +222,10 @@ async function runUITests() {
     await page.locator("textarea[placeholder*='Share a shoutout']").waitFor({ state: "visible", timeout: 8000 });
     const textarea = page.locator("textarea[placeholder*='Share a shoutout']");
     logResult("Floating Composer Opened", await textarea.isVisible());
+    logResult("Composer Shows Authenticated Identity", await page.locator("text=Posting as").first().isVisible());
 
     const testNoteText = "Automated E2E Test Note from Chromium: Sound stage is electric! #Fest26";
     await textarea.fill(testNoteText);
-    await page.fill("input[placeholder*='Anonymous or Rahat']", "QA_Robot_Jitu");
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "3-wall-composer-note.png") });
 
     await page.click("button:has-text('Post Vibe Note')");
