@@ -18,21 +18,26 @@ import {
 } from "@/types/vibewall";
 import { supabase } from "./supabase";
 import { mockDB } from "./mock-data";
+import { isMockMode, isSupabaseConfigured } from "./config";
 
-const USE_MOCK =
-  process.env.NEXT_PUBLIC_USE_MOCK === "true" ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL === "https://placeholder-project.supabase.co";
+// Mock API is used when mock mode is explicitly enabled or when real Supabase
+// credentials are unavailable (safe offline fallback). Real mode requires a
+// valid Supabase configuration and is selected only when mock mode is off.
+const USE_MOCK = isMockMode() || !isSupabaseConfigured();
 
 async function getAuthHeader(): Promise<HeadersInit> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  try {
-    const { data } = await supabase.auth.getSession();
-    if (data?.session?.access_token) {
-      headers["Authorization"] = `Bearer ${data.session.access_token}`;
-    }
-  } catch {}
+  // Attach the real Supabase access token only in real Supabase mode.
+  if (!isMockMode() && isSupabaseConfigured()) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        headers["Authorization"] = `Bearer ${data.session.access_token}`;
+      }
+    } catch {}
+  }
   return headers;
 }
 
@@ -169,6 +174,7 @@ export const api = {
       cloudinary_public_id: string;
       frame_id?: string;
       author_name?: string;
+      author_avatar?: string;
     }
   ): Promise<{ post: PostDTO }> {
     if (USE_MOCK) {

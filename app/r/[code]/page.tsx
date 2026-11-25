@@ -1,35 +1,39 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { RoomDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
-import { getCurrentUser, signInWithGoogle } from "@/lib/supabase";
+import { getAuthState, signInWithGoogle } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import { Icon } from "@/components/icons";
 
 export default function QrEntryAuthGate() {
   const params = useParams();
   const router = useRouter();
   const roomCode = String(params.code || "").toUpperCase();
 
+  const auth = useAuth();
   const [mode, setMode] = useState<"scan" | "preview">("preview");
   const [room, setRoom] = useState<RoomDTO | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [manualCode, setManualCode] = useState(roomCode);
+
+  // Duplicate-join guards
+  const joinInProgressRef = useRef(false);
+  const hasJoinedRef = useRef(false);
 
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
       setErrorMessage("");
       try {
-        const user = await getCurrentUser();
-        setCurrentUser(user);
-
         const res = await api.getRoomPreview(roomCode);
         setRoom(res.room);
       } catch (err: any) {
@@ -41,18 +45,68 @@ export default function QrEntryAuthGate() {
     if (roomCode) loadData();
   }, [roomCode]);
 
-  const handleJoin = async () => {
-    if (!room) return;
-    if (room.status !== "open") return;
+  // Auto-join once the authenticated session is confirmed after an OAuth
+  // redirect (or an existing authenticated session). Duplicate joins are
+  // prevented by the guards inside joinAndEnter.
+  useEffect(() => {
+    if (auth.isReady && auth.isAuthenticated && room?.status === "open") {
+      void handleJoin();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.isReady, auth.isAuthenticated, room]);
 
+  const joinAndEnter = async () => {
+    if (!room || room.status !== "open") return;
+    if (joinInProgressRef.current || hasJoinedRef.current) return;
+
+    joinInProgressRef.current = true;
     setIsJoining(true);
     setErrorMessage("");
     try {
       await api.joinRoom(room.code);
+      hasJoinedRef.current = true;
       router.push(`/r/${room.code}/wall`);
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to join room");
+      const state = await getAuthState().catch(() => null);
+      if (!state?.isAuthenticated) {
+        setErrorMessage(
+          "Your Google session expired. Sign in again to enter the room."
+        );
+      } else {
+        setErrorMessage(err.message || "Failed to join room. Please try again.");
+      }
+    } finally {
+      joinInProgressRef.current = false;
       setIsJoining(false);
+    }
+  };
+
+  const handleJoin = async () => {
+    if (!room || room.status !== "open") return;
+    // Interactive entry requires an authenticated Google session.
+    if (!auth.isAuthenticated) return;
+    await joinAndEnter();
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (isGoogleLoading) return;
+    setIsGoogleLoading(true);
+    setErrorMessage("");
+    try {
+      // Preserve the current room code and intended destination through OAuth.
+      await signInWithGoogle(
+        typeof window !== "undefined" ? window.location.href : undefined
+      );
+      const state = await getAuthState();
+      if (state.isAuthenticated) {
+        await joinAndEnter();
+      } else {
+        setErrorMessage("Google sign-in didn't complete. Please try again.");
+      }
+    } catch (err: any) {
+      setErrorMessage("Google sign-in failed. Please try again.");
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -61,12 +115,6 @@ export default function QrEntryAuthGate() {
     if (manualCode.trim()) {
       router.push(`/r/${manualCode.trim().toUpperCase()}`);
     }
-  };
-
-  const handleGoogleSignIn = async () => {
-    await signInWithGoogle();
-    const u = await getCurrentUser();
-    setCurrentUser(u);
   };
 
   return (
@@ -79,7 +127,7 @@ export default function QrEntryAuthGate() {
               href="/"
               className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors"
             >
-              <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+              <Icon name="arrow_back" size={24} />
             </Link>
             <div className="flex flex-col items-center">
               <span className="font-heading font-extrabold text-sm tracking-wider uppercase text-primary">
@@ -104,7 +152,7 @@ export default function QrEntryAuthGate() {
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">verified</span>
+              <Icon name="verified" size={16} />
               <span>Room Verification</span>
             </button>
             <button
@@ -115,25 +163,21 @@ export default function QrEntryAuthGate() {
                   : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">keyboard</span>
+              <Icon name="keyboard" size={16} />
               <span>Switch Code</span>
             </button>
           </div>
 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[36px] animate-spin text-primary">
-                progress_activity
-              </span>
+              <Icon name="progress_activity" size={36} className="animate-spin text-primary" />
               <span className="font-heading text-sm font-semibold">
                 Verifying Room #{roomCode}...
               </span>
             </div>
           ) : errorMessage ? (
             <div className="rounded-2xl bg-danger/10 border border-danger/30 p-6 flex flex-col items-center text-center gap-3">
-              <span className="material-symbols-outlined text-danger text-[40px]">
-                warning
-              </span>
+              <Icon name="warning" size={40} className="text-danger" />
               <h2 className="font-heading font-bold text-lg text-danger">
                 Room Not Found
               </h2>
@@ -191,9 +235,7 @@ export default function QrEntryAuthGate() {
                     {room.title}
                   </h1>
                   <div className="flex items-center gap-1.5 text-on-surface-variant text-xs mt-1">
-                    <span className="material-symbols-outlined text-[16px] text-primary">
-                      schedule
-                    </span>
+                    <Icon name="schedule" size={16} className="text-primary" />
                     <span>
                       Expires: {new Date(room.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
@@ -204,69 +246,113 @@ export default function QrEntryAuthGate() {
               {/* Status Notice if Closed or Expired */}
               {room.status !== "open" && (
                 <div className="p-4 rounded-2xl bg-danger/15 border border-danger/40 text-danger text-xs font-semibold flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[20px]">block</span>
+                  <Icon name="block" size={20} />
                   <span>
                     This event room has been {room.status}. Guest submissions are disabled.
                   </span>
                 </div>
               )}
 
-              {/* User Identity / Google Sign In Bar */}
-              <div className="p-4 rounded-2xl bg-surface-container-low border border-outline/40 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-primary/40 relative bg-surface-container-high">
-                    <Image
-                      src={
-                        currentUser?.user_metadata?.avatar_url ||
-                        "/assets/stylized_modern_vector_avatar_portrait_of_a_cool_cheerful_college_girl_with.png"
-                      }
-                      alt="User avatar"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-heading font-bold text-xs text-on-surface">
-                      {currentUser?.user_metadata?.full_name || "Guest Participant"}
-                    </span>
-                    <span className="font-body text-[11px] text-on-surface-variant">
-                      {currentUser ? "Google Identity Verified" : "1-Tap Instant Entry"}
-                    </span>
-                  </div>
+              {/* Guest read-only notice */}
+              {!auth.isAuthenticated && room.status === "open" && (
+                <div className="p-3.5 rounded-2xl bg-surface-container-low border border-primary/25 text-center text-xs font-semibold text-on-surface-variant space-y-1">
+                  <p className="font-heading font-bold text-on-surface">
+                    Viewing as a guest
+                  </p>
+                  <p>
+                    Sign in with Google to like, vote, and share moments on the
+                    live wall.
+                  </p>
                 </div>
+              )}
 
-                {!currentUser && (
-                  <button
-                    onClick={handleGoogleSignIn}
-                    className="text-xs font-bold text-primary hover:underline"
-                  >
-                    Google Login
-                  </button>
+              {/* Guest / Authenticated Identity Bar */}
+              <div className="p-4 rounded-2xl bg-surface-container-low border border-outline/40 flex flex-col gap-3">
+                {!auth.isReady ? (
+                  <div className="flex items-center justify-center gap-2 py-1">
+                    <Icon name="progress_activity" size={18} className="animate-spin text-primary" />
+                    <span className="font-body text-xs text-on-surface-variant">
+                      Checking session...
+                    </span>
+                  </div>
+                ) : auth.isAuthenticated ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-primary/40 relative bg-surface-container-high">
+                      <Image
+                        src={
+                          auth.user?.user_metadata?.avatar_url ||
+                          "/assets/stylized_modern_vector_avatar_portrait_of_a_cool_cheerful_college_girl_with.png"
+                        }
+                        alt="User avatar"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-heading font-bold text-xs text-on-surface">
+                        {auth.user?.user_metadata?.full_name || "Guest Participant"}
+                      </span>
+                      <span className="font-body text-[11px] text-on-surface-variant">
+                        Google Identity Verified
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-on-surface-variant">
+                      <Icon name="shield_lock" size={20} className="text-primary" />
+                      <span className="font-body text-xs font-medium">
+                        Sign in with Google to unlock the live wall
+                      </span>
+                    </div>
+                    <div className="flex gap-2.5">
+                      <button
+                        onClick={handleGoogleSignIn}
+                        disabled={isGoogleLoading}
+                        className="flex-1 py-2.5 px-4 rounded-xl font-heading font-bold text-xs bg-primary text-on-primary shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isGoogleLoading ? (
+                          <Icon name="progress_activity" size={18} className="animate-spin" />
+                        ) : (
+                          <Icon name="login" size={18} />
+                        )}
+                        <span>Continue with Google to Enter</span>
+                      </button>
+                      <button
+                        onClick={() => setMode("preview")}
+                        className="flex-1 py-2.5 px-4 rounded-xl font-heading font-bold text-xs bg-surface-container-high border border-outline/50 text-on-surface flex items-center justify-center gap-2 hover:border-primary/40 transition-colors"
+                      >
+                        <Icon name="visibility" size={18} />
+                        <span>Preview as Read-Only Guest</span>
+                      </button>
+                    </div>
+                    {errorMessage && (
+                      <p className="text-xs text-danger font-semibold">{errorMessage}</p>
+                    )}
+                  </>
                 )}
               </div>
 
-              {/* Join Wall Action Button */}
-              <button
-                onClick={handleJoin}
-                disabled={isJoining || room.status !== "open"}
-                className="w-full py-3.5 px-4 rounded-2xl font-heading font-bold text-sm bg-primary text-on-primary shadow-[0_0_24px_rgba(139,92,246,0.4)] hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
-              >
-                {isJoining ? (
-                  <>
-                    <span className="material-symbols-outlined text-[18px] animate-spin">
-                      progress_activity
-                    </span>
-                    <span>Entering Social Wall...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-[20px]">
-                      sensors
-                    </span>
-                    <span>Enter Live Social Wall</span>
-                  </>
-                )}
-              </button>
+              {/* Join Wall Action Button — authenticated visitors only */}
+              {auth.isAuthenticated && (
+                <button
+                  onClick={handleJoin}
+                  disabled={isJoining || room.status !== "open"}
+                  className="w-full py-3.5 px-4 rounded-2xl font-heading font-bold text-sm bg-primary text-on-primary shadow-[0_0_24px_rgba(139,92,246,0.4)] hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
+                >
+                  {isJoining ? (
+                    <>
+                      <Icon name="progress_activity" size={18} className="animate-spin" />
+                      <span>Entering Social Wall...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="sensors" size={20} />
+                      <span>Enter Live Social Wall</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           ) : (
             /* Manual / Switch Code Form */

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { PollDTO } from "@/types/vibewall";
+import { Icon } from "@/components/icons";
 
 interface PollCardProps {
   poll: PollDTO;
-  onVote?: (optionId: string) => void;
+  onVote?: (optionId: string) => boolean | void | Promise<boolean | void>;
   className?: string;
 }
 
@@ -15,15 +16,30 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Synchronize local selection when the poll identity or its voted state
+  // changes (e.g. a new poll launched via realtime) so stale selections from a
+  // previous poll are never carried over.
+  useEffect(() => {
+    setSelectedOptionId(poll.user_voted_option_id);
+  }, [poll.id, poll.user_voted_option_id]);
+
   const hasVoted = Boolean(selectedOptionId);
   const totalVotes = poll.total_votes || 1; // avoid division by 0
 
   const handleVote = async (optionId: string) => {
     if (hasVoted || isSubmitting) return;
+    const previousSelected = selectedOptionId;
     setIsSubmitting(true);
     setSelectedOptionId(optionId);
     try {
-      await onVote?.(optionId);
+      const result = await onVote?.(optionId);
+      if (result === false) {
+        // Auth guard blocked or the vote failed — revert the optimistic selection.
+        setSelectedOptionId(previousSelected);
+      }
+    } catch {
+      // Vote request failed — revert the optimistic selection.
+      setSelectedOptionId(previousSelected);
     } finally {
       setIsSubmitting(false);
     }
@@ -44,9 +60,7 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
             LIVE POLL • {poll.total_votes} votes
           </span>
         </div>
-        <span className="material-symbols-outlined text-primary text-[20px]">
-          how_to_vote
-        </span>
+        <Icon name="how_to_vote" size={20} className="text-primary" />
       </div>
 
       {/* Question */}
@@ -82,15 +96,12 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
               {/* Text & Percentage content */}
               <div className="relative flex items-center justify-between gap-3 z-10">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={`material-symbols-outlined text-[18px] shrink-0 ${
-                      isSelected
-                        ? "text-primary fill"
-                        : "text-on-surface-variant"
-                    }`}
-                  >
-                    {isSelected ? "check_circle" : "radio_button_unchecked"}
-                  </span>
+                  <Icon
+                    name={isSelected ? "check_circle" : "radio_button_unchecked"}
+                    size={18}
+                    filled={isSelected}
+                    className={`shrink-0 ${isSelected ? "text-primary" : "text-on-surface-variant"}`}
+                  />
                   <span className="font-body text-sm font-medium text-on-surface truncate">
                     {option.option_text}
                   </span>

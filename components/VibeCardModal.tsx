@@ -7,6 +7,7 @@ import {
   generateVibeCardCanvas,
   exportVibeCardPNG,
 } from "@/lib/vibecard";
+import { Icon } from "@/components/icons";
 
 interface VibeCardModalProps {
   isOpen: boolean;
@@ -96,9 +97,7 @@ export default function VibeCardModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-outline/30 bg-surface-container-low">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[22px]">
-              badge
-            </span>
+            <Icon name="badge" size={22} className="text-primary" />
             <h3 className="font-heading font-bold text-sm text-on-surface">
               Export VibeCard
             </h3>
@@ -107,7 +106,7 @@ export default function VibeCardModal({
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <Icon name="close" size={20} />
           </button>
         </div>
 
@@ -139,9 +138,7 @@ export default function VibeCardModal({
         <div className="flex-1 p-4 flex items-center justify-center bg-surface-container-lowest/40 overflow-y-auto">
           {isRendering || !previewDataUrl ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[32px] animate-spin text-primary">
-                progress_activity
-              </span>
+              <Icon name="progress_activity" size={32} className="animate-spin text-primary" />
               <span className="font-body text-xs font-medium">
                 Generating high-res card...
               </span>
@@ -170,9 +167,7 @@ export default function VibeCardModal({
             disabled={isExporting || isRendering}
             className="flex-[2] py-2.5 px-4 rounded-xl font-heading font-bold text-xs bg-primary text-on-primary shadow-lg hover:brightness-110 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
-            <span className="material-symbols-outlined text-[16px]">
-              {isExporting ? "sync" : "download"}
-            </span>
+            <Icon name={isExporting ? "sync" : "download"} size={16} />
             <span>{isExporting ? "Saving..." : "Download / Share PNG"}</span>
           </button>
         </div>
