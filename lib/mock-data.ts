@@ -9,6 +9,10 @@ import {
 } from "@/types/vibewall";
 import { broadcastLocalEvent } from "./supabase";
 
+function mockError(status: number, message: string): never {
+  throw Object.assign(new Error(message), { status, code: "VALIDATION_ERROR" });
+}
+
 export interface MockStore {
   rooms: Map<string, RoomDTO & { screen_token: string; owner_id: string }>;
   posts: Map<string, PostDTO & { room_code: string; report_count: number }>;
@@ -226,8 +230,7 @@ export const mockDB = {
     for (const r of store.rooms.values()) {
       if (r.screen_token === token) return r;
     }
-    // Fallback: return default room for demo screen
-    return store.rooms.get("VIBE26") || null;
+    return null;
   },
 
   createRoom(params: { title: string; theme: ThemeKey; expires_in_hours: number; owner_id?: string }) {
@@ -276,6 +279,7 @@ export const mockDB = {
   getFeed(code: string, includeHidden = false): FeedResponse {
     const store = getMockStore();
     const cleanCode = code.toUpperCase();
+    if (!store.rooms.has(cleanCode)) mockError(404, "Room not found");
     const posts: PostDTO[] = [];
     for (const p of store.posts.values()) {
       if (p.room_code === cleanCode) {
@@ -321,6 +325,7 @@ export const mockDB = {
   createPost(code: string, data: { image_url: string; frame_id?: string; author_name?: string; author_avatar?: string }) {
     const store = getMockStore();
     const cleanCode = code.toUpperCase();
+    if (!store.rooms.has(cleanCode)) mockError(404, "Room not found");
     const room = store.rooms.get(cleanCode);
     const id = "post-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
     const post: PostDTO & { room_code: string; report_count: number } = {
@@ -344,6 +349,7 @@ export const mockDB = {
   createNote(code: string, body: string, authorName?: string) {
     const store = getMockStore();
     const cleanCode = code.toUpperCase();
+    if (!store.rooms.has(cleanCode)) mockError(404, "Room not found");
     const room = store.rooms.get(cleanCode);
     const id = "note-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
     const note: NoteDTO & { room_code: string; report_count: number } = {
@@ -367,13 +373,13 @@ export const mockDB = {
     const store = getMockStore();
     if (targetType === "post") {
       const post = store.posts.get(targetId);
-      if (!post) return null;
+      if (!post) mockError(404, "Post not found");
       post.liked_by_me = !post.liked_by_me;
       post.like_count += post.liked_by_me ? 1 : -1;
       return { liked: post.liked_by_me, like_count: post.like_count };
     } else {
       const note = store.notes.get(targetId);
-      if (!note) return null;
+      if (!note) mockError(404, "Note not found");
       note.liked_by_me = !note.liked_by_me;
       note.like_count += note.liked_by_me ? 1 : -1;
       return { liked: note.liked_by_me, like_count: note.like_count };
@@ -383,10 +389,11 @@ export const mockDB = {
   votePoll(pollId: string, optionId: string) {
     const store = getMockStore();
     const poll = store.polls.get(pollId);
-    if (!poll || !poll.is_open) return null;
+    if (!poll) mockError(404, "Poll not found");
+    if (!poll.is_open || poll.user_voted_option_id) mockError(409, "Poll closed or already voted");
 
     const opt = poll.options.find((o) => o.id === optionId);
-    if (!opt) return null;
+    if (!opt) mockError(400, "Invalid poll option");
 
     opt.vote_count += 1;
     poll.total_votes += 1;
@@ -400,6 +407,7 @@ export const mockDB = {
   createPoll(code: string, question: string, options: string[]) {
     const store = getMockStore();
     const cleanCode = code.toUpperCase();
+    if (!store.rooms.has(cleanCode)) mockError(404, "Room not found");
     const room = store.rooms.get(cleanCode);
     const pollId = "poll-" + Date.now();
     const poll: PollDTO & { room_code: string } = {
@@ -423,6 +431,7 @@ export const mockDB = {
   createStory(code: string, prompt: string) {
     const store = getMockStore();
     const cleanCode = code.toUpperCase();
+    if (!store.rooms.has(cleanCode)) mockError(404, "Room not found");
     const storyId = "story-" + Date.now();
     const story: StoryDTO & { room_code: string } = {
       id: storyId,
@@ -431,6 +440,9 @@ export const mockDB = {
       entries: [],
       room_code: cleanCode,
     };
+    for (const previous of store.stories.values()) {
+      if (previous.room_code === cleanCode) previous.is_active = false;
+    }
     store.stories.set(storyId, story);
     return story;
   },
@@ -438,7 +450,8 @@ export const mockDB = {
   addStoryEntry(storyId: string, imageUrl: string, authorName?: string) {
     const store = getMockStore();
     const story = store.stories.get(storyId);
-    if (!story || !story.is_active) return null;
+    if (!story) mockError(404, "Story not found");
+    if (!story.is_active) mockError(409, "Story has ended");
 
     const entry = {
       id: "entry-" + Date.now(),

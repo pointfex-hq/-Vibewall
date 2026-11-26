@@ -169,7 +169,7 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
     return errorResponse(404, "VALIDATION_ERROR", "Route not found");
   } catch (err: any) {
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: err?.message || "Internal Error" } },
+      { error: { code: err?.code || "INTERNAL_ERROR", message: err?.message || "Internal Error" } },
       { status: err?.status || 500 }
     );
   }
