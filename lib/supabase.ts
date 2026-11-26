@@ -38,6 +38,7 @@ export async function signInWithGoogle(
           avatar_url: "/assets/stylized_modern_digital_vector_portrait_illustration_of_a_charismatic_south.png",
         },
       };
+      localStorage.removeItem("vibewall_mock_signed_out");
       localStorage.setItem("vibewall_mock_user", JSON.stringify(mockUser));
       if (redirectTo) {
         window.location.href = redirectTo;
@@ -62,6 +63,7 @@ export async function signInWithGoogle(
 
 export async function signOut() {
   if (typeof window !== "undefined") {
+    if (isMockMode()) localStorage.setItem("vibewall_mock_signed_out", "true");
     localStorage.removeItem("vibewall_mock_user");
   }
   if (getAuthMode() === "supabase") {
@@ -85,7 +87,7 @@ export async function getCurrentUser() {
           }
         } catch {}
       }
-      if (isDemoHostEnabled()) {
+      if (isDemoHostEnabled() && !localStorage.getItem("vibewall_mock_signed_out")) {
         // Explicit opt-in demo host identity; never granted implicitly.
         return getDemoHostUser();
       }
@@ -126,7 +128,7 @@ export async function getAuthState(): Promise<AuthStateResult> {
           }
         } catch {}
       }
-      if (isDemoHostEnabled()) {
+      if (isDemoHostEnabled() && !localStorage.getItem("vibewall_mock_signed_out")) {
         // Explicit opt-in demo host identity; never granted implicitly.
         return { user: getDemoHostUser(), isAuthenticated: true };
       }
