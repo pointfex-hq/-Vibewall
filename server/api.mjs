@@ -46,7 +46,7 @@ export function match(method, path) {
       segments.length === parts.length &&
       segments.every((s, i) => s.startsWith(":") || s === parts[i])
     )
-      return { action, key: parts[1] };
+      return { action, key: parts[1], readOnly: verb === "GET" };
   }
   fail(404, "Unknown API route");
 }
@@ -62,8 +62,8 @@ async function run(sql, route, b, actor, url, headers, verifiedAsset) {
   if (!uid && !["preview", "screen"].includes(action))
     fail(401, "Sign in with Google", "UNAUTHORIZED");
   await sql`set local search_path = wall,public`;
-  if (actor && !["preview", "feed", "screen"].includes(action))
-    await sql`insert into users(id,provider_subject,display_name,avatar_url,email) values(${uid},${actor.sub},${actor.name},${actor.avatar},${actor.email}) on conflict(id) do update set display_name=excluded.display_name,avatar_url=excluded.avatar_url,email=excluded.email`;
+  if (actor && !route.readOnly)
+    await sql`insert into users(id,provider_subject,display_name,avatar_url,email) values(${uid},${actor.sub},${actor.name},${actor.avatar},${actor.email}) on conflict(id) do update set display_name=excluded.display_name,avatar_url=excluded.avatar_url,email=excluded.email where (users.display_name,users.avatar_url,users.email) is distinct from (excluded.display_name,excluded.avatar_url,excluded.email)`;
   if (action === "create") {
     const title = string(b.title, 200),
       theme = b.theme ?? themes[0],

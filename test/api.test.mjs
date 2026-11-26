@@ -75,6 +75,11 @@ test(
       await api("GET", base, null, null);
       await api("GET", base + "/feed", null, ids[1], 403);
       for (const id of ids.slice(1)) await api("POST", base + "/join", {}, id);
+      const profileVersion = async () => (await sql`select xmin::text as version from wall.users where id=${ids[0]}`)[0].version;
+      const beforeReads = await profileVersion();
+      await api("GET", base);
+      await api("GET", base + "/feed");
+      assert.equal(await profileVersion(), beforeReads);
       const { note } = await api("POST", base + "/notes", { body: "hello" });
       await api("POST", base + "/notes", { body: "again" }, ids[0], 429);
       const target = { target_type: "note", target_id: note.id };
