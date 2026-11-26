@@ -28,9 +28,11 @@ test(
       );
       const ids = Array.from({ length: 4 }, () => randomUUID());
       for (const id of ids) await sql`insert into auth.users values(${id})`;
+      let waitForCloudinary;
       global.fetch = async (url, opt) => {
         if (url.startsWith("https://api.cloudinary.com")) {
           if (url.endsWith("/destroy")) return Response.json({ result: "ok" });
+          if (waitForCloudinary) await waitForCloudinary();
           const public_id = decodeURIComponent(url.split("/").pop());
           return Response.json({
             public_id,
@@ -123,6 +125,30 @@ test(
           image_url: "https://image.test/" + id,
           cloudinary_public_id: id,
         };
+      }
+      // Saturate all three connections if verification ever moves back into a transaction.
+      const pendingAssets = await Promise.all(ids.slice(1).map(async user => {
+        const { params } = await api("POST", "cloudinary/sign", { folder: "vibewall" }, user);
+        const id = "vibewall/" + params.public_id;
+        return { cloudinary_public_id: id, image_url: "https://image.test/" + id };
+      }));
+      let release;
+      const delayed = new Promise(resolve => { release = resolve; });
+      let entered = 0;
+      waitForCloudinary = () => { entered++; return delayed; };
+      const uploads = pendingAssets.map((asset, i) => api("POST", base + "/posts", asset, ids[i + 1]));
+      const deadline = Date.now() + 3000;
+      try {
+        while (entered < 3 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+        assert.equal(entered, 3, "all three verifications overlap");
+        await Promise.race([
+          api("GET", base),
+          new Promise((_, reject) => setTimeout(() => reject(Error("preview blocked by uploads")), 1500).unref()),
+        ]);
+      } finally {
+        release();
+        await Promise.all(uploads);
+        waitForCloudinary = undefined;
       }
       const { post } = await api("POST", base + "/posts", await media());
       const { entry } = await api(
