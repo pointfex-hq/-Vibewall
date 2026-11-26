@@ -102,10 +102,14 @@ export function sign(params) {
     .update(canonical + process.env.CLOUDINARY_API_SECRET)
     .digest("hex");
 }
-export async function verifyAsset(sql, user, body) {
+export async function claimAsset(sql, user, id) {
+  const [claim] = await sql`update uploads set used=true where public_id=${id} and user_id=${user} and not used returning public_id`;
+  if (!claim) deny();
+  return id;
+}
+export async function verifyAsset(user, body) {
   const id = string(body.cloudinary_public_id, 200);
-  const [claim] =
-    await sql`update uploads set used=true where public_id=${id} and user_id=${user} and not used returning public_id`;
+  const [claim] = await db()`select from wall.uploads where public_id=${id} and user_id=${user} and not used`;
   if (!claim) deny();
   const cloud = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const auth = Buffer.from(

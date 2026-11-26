@@ -22,7 +22,7 @@ const errorCases = [
   { url: "/api/rooms/UNKNOWN", method: "GET", expectStatus: 404, expectCode: "VALIDATION_ERROR", name: "GET /api/rooms/[code] (room not found)" },
   { url: "/api/rooms/UNKNOWN/join", method: "POST", expectStatus: 404, expectCode: "VALIDATION_ERROR", name: "POST /api/rooms/[code]/join (room not found)" },
   { url: "/api/rooms/UNKNOWN", method: "PATCH", expectStatus: 404, expectCode: "VALIDATION_ERROR", name: "PATCH /api/rooms/[code] (room not found)" },
-  { url: "/api/screen/bad-token", method: "GET", expectStatus: 200, expectCode: null, name: "GET /api/screen/[token] (mock fallback: default room for demo screens — pre-existing behavior; 404 path returns VALIDATION_ERROR/'Invalid screen token')" },
+  { url: "/api/screen/bad-token", method: "GET", expectStatus: 404, expectCode: "VALIDATION_ERROR", name: "GET invalid screen token" },
   { url: "/api/nonexistent-route", method: "GET", expectStatus: 404, expectCode: "VALIDATION_ERROR", name: "GET unknown route (Route not found)" },
 ];
 

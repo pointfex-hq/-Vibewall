@@ -15,6 +15,7 @@ import {
   emit,
   sign,
   verifyAsset,
+  claimAsset,
 } from "./core.mjs";
 import { feed, items, pollDTO, storyDTO } from "./feed.mjs";
 
@@ -45,7 +46,7 @@ export function match(method, path) {
       segments.length === parts.length &&
       segments.every((s, i) => s.startsWith(":") || s === parts[i])
     )
-      return { action, key: parts[1] };
+      return { action, key: parts[1], readOnly: verb === "GET" };
   }
   fail(404, "Unknown API route");
 }
@@ -54,15 +55,15 @@ const targetTables = {
   note: "notes",
   story_entry: "story_entries",
 };
-async function run(sql, route, b, actor, url, headers) {
+async function run(sql, route, b, actor, url, headers, verifiedAsset) {
   const { action, key } = route;
   const uid = actor?.id ?? null;
   const origin = process.env.APP_ORIGIN;
   if (!uid && !["preview", "screen"].includes(action))
     fail(401, "Sign in with Google", "UNAUTHORIZED");
   await sql`set local search_path = wall,public`;
-  if (actor && !["preview", "feed", "screen"].includes(action))
-    await sql`insert into users(id,provider_subject,display_name,avatar_url,email) values(${uid},${actor.sub},${actor.name},${actor.avatar},${actor.email}) on conflict(id) do update set display_name=excluded.display_name,avatar_url=excluded.avatar_url,email=excluded.email`;
+  if (actor && !route.readOnly)
+    await sql`insert into users(id,provider_subject,display_name,avatar_url,email) values(${uid},${actor.sub},${actor.name},${actor.avatar},${actor.email}) on conflict(id) do update set display_name=excluded.display_name,avatar_url=excluded.avatar_url,email=excluded.email where (users.display_name,users.avatar_url,users.email) is distinct from (excluded.display_name,excluded.avatar_url,excluded.email)`;
   if (action === "create") {
     const title = string(b.title, 200),
       theme = b.theme ?? themes[0],
@@ -177,6 +178,7 @@ async function run(sql, route, b, actor, url, headers) {
     const secret = b.rotate_screen_token ? token() : null;
     const [updated] =
       await sql`update rooms set theme=${b.theme ?? room.theme},status=${b.status ?? room.status},screen_token_hash=${secret ? hash(secret) : room.screen_token_hash} where id=${room.id} returning *`;
+    if (b.status === "closed") await emit(sql, room.id, "room_closed", {});
     if (b.theme) await emit(sql, room.id, "theme_updated", { theme: b.theme });
     return {
       room: roomDTO(updated),
@@ -192,7 +194,7 @@ async function run(sql, route, b, actor, url, headers) {
     if (quota.cooling || (photo && quota.total >= 15)) limited();
     let row;
     if (photo) {
-      const asset = await verifyAsset(sql, uid, b);
+      const asset = await claimAsset(sql, uid, verifiedAsset);
       [row] =
         await sql`insert into posts(room_id,author_user_id,image_url,cloudinary_public_id,frame_id) values(${room.id},${uid},${b.image_url},${asset},${string(b.frame_id ?? "classic", 80)}) returning id`;
     } else {
@@ -220,7 +222,7 @@ async function run(sql, route, b, actor, url, headers) {
   if (action === "entry") {
     [story] = await sql`select * from stories where id=${key} and is_active`;
     if (!story) fail(409, "Story has ended");
-    const asset = await verifyAsset(sql, uid, b);
+    const asset = await claimAsset(sql, uid, verifiedAsset);
     const [entry] =
       await sql`insert into story_entries(story_id,author_user_id,image_url,cloudinary_public_id,sequence_order) select ${key},${uid},${b.image_url},${asset},coalesce(max(sequence_order),0)+1 from story_entries where story_id=${key} on conflict(story_id,author_user_id) do nothing returning id,image_url,sequence_order,created_at`;
     if (!entry) fail(409, "Already contributed");
@@ -350,8 +352,13 @@ export async function handle(req, { params }) {
       if (!body || typeof body !== "object" || Array.isArray(body))
         fail(400, "Expected a JSON object");
     }
+    let verifiedAsset;
+    if (["entry", "post"].includes(route.action)) {
+      if (!actor) fail(401, "Sign in with Google", "UNAUTHORIZED");
+      verifiedAsset = await verifyAsset(actor.id, body);
+    }
     const result = await db().begin((sql) =>
-      run(sql, route, body, actor, new URL(req.url), headers),
+      run(sql, route, body, actor, new URL(req.url), headers, verifiedAsset),
     );
     return Response.json(result, { headers });
   } catch (e) {

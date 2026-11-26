@@ -1,9 +1,10 @@
 import { chromium } from "playwright";
+import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import path from "node:path";
 
 const BASE_URL = "http://localhost:3000";
-const SCREENSHOTS_DIR = "/home/jitu/Downloads/VibeWall/tests/screenshots";
+const SCREENSHOTS_DIR = fileURLToPath(new URL("./screenshots/", import.meta.url));
 
 async function runUITests() {
   console.log("==================================================");
@@ -12,7 +13,6 @@ async function runUITests() {
 
   const browser = await chromium.launch({
     headless: true,
-    executablePath: "/home/jitu/.cache/ms-playwright/chromium-1254/chrome-linux64/chrome",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
