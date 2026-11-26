@@ -59,7 +59,16 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
     if (method === "GET" && path.length === 2 && path[0] === "rooms") {
       const room = mockDB.getRoom(path[1]);
       if (!room) return errorResponse(404, "VALIDATION_ERROR", "Room not found");
-      return NextResponse.json({ room, is_owner: true, is_member: true });
+      const origin = url.origin;
+      const screen_token = room.screen_token;
+      const screen_url = screen_token ? `${origin}/screen/${encodeURIComponent(screen_token)}` : undefined;
+      return NextResponse.json({
+        room,
+        is_owner: true,
+        is_member: true,
+        screen_token,
+        screen_url,
+      });
     }
 
     // 3. POST /api/rooms/[code]/join

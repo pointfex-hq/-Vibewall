@@ -11,6 +11,7 @@ export interface RoomDTO {
   theme: ThemeKey;
   status: "open" | "closed" | "expired";
   expires_at: string;
+  screen_token?: string;
 }
 
 export interface PostDTO {
@@ -82,6 +83,8 @@ export interface RoomPreviewResponse {
   room: RoomDTO;
   is_owner: boolean;
   is_member: boolean;
+  screen_token?: string;
+  screen_url?: string;
 }
 
 export interface CreateRoomResponse {

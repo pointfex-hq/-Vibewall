@@ -222,12 +222,13 @@ export const mockDB = {
   },
 
   getRoomByToken(token: string) {
+    const trimmed = typeof token === "string" ? token.trim() : "";
+    if (!trimmed) return null;
     const store = getMockStore();
     for (const r of store.rooms.values()) {
-      if (r.screen_token === token) return r;
+      if (r.screen_token === trimmed) return r;
     }
-    // Fallback: return default room for demo screen
-    return store.rooms.get("VIBE26") || null;
+    return null;
   },
 
   createRoom(params: { title: string; theme: ThemeKey; expires_in_hours: number; owner_id?: string }) {

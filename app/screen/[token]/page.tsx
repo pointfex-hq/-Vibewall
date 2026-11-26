@@ -19,6 +19,7 @@ export default function VenueDisplayPage() {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Load initial screen data
   useEffect(() => {
@@ -38,13 +39,19 @@ export default function VenueDisplayPage() {
           },
         });
         setQrCodeDataUrl(qr);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Venue screen load failed:", err);
+        setError(err?.message || "Invalid or expired venue screen token");
       } finally {
         setIsLoading(false);
       }
     }
-    if (screenToken) loadScreen();
+    if (screenToken) {
+      loadScreen();
+    } else {
+      setError("No screen token provided");
+      setIsLoading(false);
+    }
   }, [screenToken]);
 
   // Realtime synchronization for Venue Display
@@ -171,13 +178,34 @@ export default function VenueDisplayPage() {
     }
   };
 
-  if (isLoading || !screenData) {
+  if (isLoading) {
     return (
       <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center gap-3">
         <Icon name="progress_activity" size={48} className="animate-spin text-primary" />
         <span className="font-heading font-extrabold text-xl tracking-wider">
           Connecting Venue Display...
         </span>
+      </div>
+    );
+  }
+
+  if (error || !screenData) {
+    return (
+      <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center gap-4 p-6 text-center select-none">
+        <div className="w-16 h-16 rounded-2xl bg-danger/10 border border-danger/30 flex items-center justify-center text-danger shadow-[0_0_24px_rgba(239,68,68,0.2)]">
+          <Icon name="error" size={32} />
+        </div>
+        <div className="flex flex-col gap-1 max-w-md">
+          <h1 className="font-heading font-extrabold text-2xl tracking-tight text-white">
+            Venue Display Unavailable
+          </h1>
+          <p className="font-body text-sm text-gray-400">
+            {error || "The venue screen token is invalid, expired, or has been rotated by the host."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg bg-surface-container border border-outline/30 text-xs text-gray-400 font-mono">
+          <span>HTTP 404 • INVALID_SCREEN_TOKEN</span>
+        </div>
       </div>
     );
   }
