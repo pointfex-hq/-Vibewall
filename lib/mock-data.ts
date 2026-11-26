@@ -13,7 +13,18 @@ function mockError(status: number, message: string): never {
   throw Object.assign(new Error(message), { status, code: "VALIDATION_ERROR" });
 }
 
+function voterId(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const user = JSON.parse(localStorage.getItem("vibewall_mock_user") || "null");
+      if (user?.id) return user.id;
+    } catch {}
+  }
+  return "demo";
+}
+
 export interface MockStore {
+  votes: Map<string, string>;
   rooms: Map<string, RoomDTO & { screen_token: string; owner_id: string }>;
   posts: Map<string, PostDTO & { room_code: string; report_count: number }>;
   notes: Map<string, NoteDTO & { room_code: string; report_count: number }>;
@@ -208,7 +219,7 @@ function initSeedStore(): MockStore {
   };
   stories.set(seedStory.id, seedStory);
 
-  return { rooms, posts, notes, polls, stories };
+  return { rooms, posts, notes, polls, stories, votes: new Map() };
 }
 
 export function getMockStore(): MockStore {
@@ -306,7 +317,7 @@ export const mockDB = {
     let active_poll: PollDTO | null = null;
     for (const pl of store.polls.values()) {
       if (pl.room_code === cleanCode && pl.is_open) {
-        active_poll = pl;
+        active_poll = { ...pl, user_voted_option_id: store.votes.get(pl.id + ":" + voterId()) ?? null };
         break;
       }
     }
@@ -390,18 +401,19 @@ export const mockDB = {
     const store = getMockStore();
     const poll = store.polls.get(pollId);
     if (!poll) mockError(404, "Poll not found");
-    if (!poll.is_open || poll.user_voted_option_id) mockError(409, "Poll closed or already voted");
+    const ballot = poll.id + ":" + voterId();
+    if (!poll.is_open || store.votes.has(ballot)) mockError(409, "Poll closed or already voted");
 
     const opt = poll.options.find((o) => o.id === optionId);
     if (!opt) mockError(400, "Invalid poll option");
 
     opt.vote_count += 1;
     poll.total_votes += 1;
-    poll.user_voted_option_id = optionId;
+    store.votes.set(ballot, optionId);
 
     const room = store.rooms.get(poll.room_code);
     if (room) broadcastLocalEvent(room.id, "poll_updated", { poll });
-    return poll;
+    return { ...poll, user_voted_option_id: optionId };
   },
 
   createPoll(code: string, question: string, options: string[]) {
@@ -409,7 +421,10 @@ export const mockDB = {
     const cleanCode = code.toUpperCase();
     if (!store.rooms.has(cleanCode)) mockError(404, "Room not found");
     const room = store.rooms.get(cleanCode);
-    const pollId = "poll-" + Date.now();
+    for (const previous of store.polls.values()) {
+      if (previous.room_code === cleanCode) previous.is_open = false;
+    }
+    const pollId = "poll-" + crypto.randomUUID();
     const poll: PollDTO & { room_code: string } = {
       id: pollId,
       question: question.trim(),
@@ -432,7 +447,7 @@ export const mockDB = {
     const store = getMockStore();
     const cleanCode = code.toUpperCase();
     if (!store.rooms.has(cleanCode)) mockError(404, "Room not found");
-    const storyId = "story-" + Date.now();
+    const storyId = "story-" + crypto.randomUUID();
     const story: StoryDTO & { room_code: string } = {
       id: storyId,
       prompt: prompt.trim(),
