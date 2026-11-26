@@ -442,6 +442,8 @@ export default function LiveSocialWallPage() {
     });
   };
 
+  if (room?.status === "closed") return <main role="status" className="p-8">This room is closed.</main>;
+
   return (
     <ThemeWrapper themeKey={room?.theme || "midnight-neon"}>
       <div className="flex flex-col min-h-screen bg-surface text-on-surface pb-28">
