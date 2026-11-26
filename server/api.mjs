@@ -178,6 +178,7 @@ async function run(sql, route, b, actor, url, headers, verifiedAsset) {
     const secret = b.rotate_screen_token ? token() : null;
     const [updated] =
       await sql`update rooms set theme=${b.theme ?? room.theme},status=${b.status ?? room.status},screen_token_hash=${secret ? hash(secret) : room.screen_token_hash} where id=${room.id} returning *`;
+    if (b.status === "closed") await emit(sql, room.id, "room_closed", {});
     if (b.theme) await emit(sql, room.id, "theme_updated", { theme: b.theme });
     return {
       room: roomDTO(updated),

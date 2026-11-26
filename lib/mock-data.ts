@@ -261,7 +261,10 @@ export const mockDB = {
       room.theme = updates.theme;
       broadcastLocalEvent(room.id, "theme_updated", { theme: updates.theme });
     }
-    if (updates.status) room.status = updates.status;
+    if (updates.status) {
+      room.status = updates.status;
+      if (updates.status === "closed") broadcastLocalEvent(room.id, "room_closed", {});
+    }
     let newScreenUrl: string | undefined;
     if (updates.rotate_screen_token) {
       room.screen_token = "st_" + Math.random().toString(36).substring(2, 12);

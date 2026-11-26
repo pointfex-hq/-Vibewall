@@ -143,6 +143,7 @@ export async function getAuthState(): Promise<AuthStateResult> {
 }
 
 export interface RealtimeHandlers {
+  onRoomClosed?: () => void;
   onNewPost?: (payload: RealtimeEventPayloads["new_post"]) => void;
   onNewNote?: (payload: RealtimeEventPayloads["new_note"]) => void;
   onContentModerated?: (payload: RealtimeEventPayloads["content_moderated"]) => void;
@@ -157,6 +158,7 @@ export function subscribeToRoom(roomId: string, handlers: RealtimeHandlers): () 
       const listener = (event: CustomEvent<{ room_id: string; type: string; payload: any }>) => {
         if (event.detail?.room_id === roomId) {
           const { type, payload } = event.detail;
+          if (type === "room_closed") handlers.onRoomClosed?.();
           if (type === "new_post" && handlers.onNewPost) handlers.onNewPost(payload);
           if (type === "new_note" && handlers.onNewNote) handlers.onNewNote(payload);
           if (type === "content_moderated" && handlers.onContentModerated) handlers.onContentModerated(payload);
@@ -176,6 +178,7 @@ export function subscribeToRoom(roomId: string, handlers: RealtimeHandlers): () 
   const channel: RealtimeChannel = supabase.channel(channelName);
 
   channel
+    .on("broadcast", { event: "room_closed" }, () => handlers.onRoomClosed?.())
     .on("broadcast", { event: "new_post" }, ({ payload }) => {
       handlers.onNewPost?.(payload);
     })

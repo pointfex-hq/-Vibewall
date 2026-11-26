@@ -55,6 +55,7 @@ export default function VenueDisplayPage() {
     if (!screenData?.room?.id) return;
 
     const unsubscribe = subscribeToRoom(screenData.room.id, {
+      onRoomClosed: () => setLoadError("Room is closed"),
       onNewPost: ({ post }) => {
         setScreenData((prev) =>
           prev

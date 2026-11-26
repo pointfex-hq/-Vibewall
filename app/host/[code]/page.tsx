@@ -157,6 +157,7 @@ export default function HostDashboardPage() {
     if (!room?.id) return;
 
     const unsubscribe = subscribeToRoom(room.id, {
+      onRoomClosed: () => setRoom(prev => prev && { ...prev, status: "closed" }),
       onNewPost: ({ post }) => {
         setFeed((prev) => applyNewPost(prev, post));
       },
