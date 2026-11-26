@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import QRCode from "qrcode";
+import { roomQrDataUrl } from "@/lib/room-qr";
 import {
   FeedResponse,
   PostDTO,
@@ -134,11 +134,7 @@ export default function HostDashboardPage() {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       setScreenUrl(sessionStorage.getItem(`venue:${preview.room.id}`) || "");
 
-      const qr = await QRCode.toDataURL(`${origin}/r/${roomCode}`, {
-        width: 320,
-        margin: 2,
-        color: { dark: "#000000", light: "#FFFFFF" },
-      });
+      const qr = await roomQrDataUrl(origin, roomCode, 320);
       setQrCodeUrl(qr);
     } catch (err) {
       console.error("Dashboard load failed:", err);
