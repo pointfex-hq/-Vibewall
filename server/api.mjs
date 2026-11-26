@@ -15,6 +15,7 @@ import {
   emit,
   sign,
   verifyAsset,
+  claimAsset,
 } from "./core.mjs";
 import { feed, items, pollDTO, storyDTO } from "./feed.mjs";
 
@@ -54,7 +55,7 @@ const targetTables = {
   note: "notes",
   story_entry: "story_entries",
 };
-async function run(sql, route, b, actor, url, headers) {
+async function run(sql, route, b, actor, url, headers, verifiedAsset) {
   const { action, key } = route;
   const uid = actor?.id ?? null;
   const origin = process.env.APP_ORIGIN;
@@ -192,7 +193,7 @@ async function run(sql, route, b, actor, url, headers) {
     if (quota.cooling || (photo && quota.total >= 15)) limited();
     let row;
     if (photo) {
-      const asset = await verifyAsset(sql, uid, b);
+      const asset = await claimAsset(sql, uid, verifiedAsset);
       [row] =
         await sql`insert into posts(room_id,author_user_id,image_url,cloudinary_public_id,frame_id) values(${room.id},${uid},${b.image_url},${asset},${string(b.frame_id ?? "classic", 80)}) returning id`;
     } else {
@@ -220,7 +221,7 @@ async function run(sql, route, b, actor, url, headers) {
   if (action === "entry") {
     [story] = await sql`select * from stories where id=${key} and is_active`;
     if (!story) fail(409, "Story has ended");
-    const asset = await verifyAsset(sql, uid, b);
+    const asset = await claimAsset(sql, uid, verifiedAsset);
     const [entry] =
       await sql`insert into story_entries(story_id,author_user_id,image_url,cloudinary_public_id,sequence_order) select ${key},${uid},${b.image_url},${asset},coalesce(max(sequence_order),0)+1 from story_entries where story_id=${key} on conflict(story_id,author_user_id) do nothing returning id,image_url,sequence_order,created_at`;
     if (!entry) fail(409, "Already contributed");
@@ -350,8 +351,13 @@ export async function handle(req, { params }) {
       if (!body || typeof body !== "object" || Array.isArray(body))
         fail(400, "Expected a JSON object");
     }
+    let verifiedAsset;
+    if (["entry", "post"].includes(route.action)) {
+      if (!actor) fail(401, "Sign in with Google", "UNAUTHORIZED");
+      verifiedAsset = await verifyAsset(actor.id, body);
+    }
     const result = await db().begin((sql) =>
-      run(sql, route, body, actor, new URL(req.url), headers),
+      run(sql, route, body, actor, new URL(req.url), headers, verifiedAsset),
     );
     return Response.json(result, { headers });
   } catch (e) {
