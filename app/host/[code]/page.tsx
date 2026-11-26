@@ -130,16 +130,10 @@ export default function HostDashboardPage() {
       const feedData = await api.getFeed(roomCode, true);
       setFeed(feedData);
 
-      // Venue screen URL resolution from room data
+      // Default venue screen URL
+      const defaultToken = "screen_token_vibe26_live";
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const token = preview.screen_token || preview.room?.screen_token;
-      if (preview.screen_url) {
-        setScreenUrl(preview.screen_url);
-      } else if (token) {
-        setScreenUrl(`${origin}/screen/${encodeURIComponent(token)}`);
-      } else {
-        setScreenUrl("");
-      }
+      setScreenUrl(`${origin}/screen/${defaultToken}`);
 
       const qr = await QRCode.toDataURL(`${origin}/r/${roomCode}`, {
         width: 320,
@@ -237,13 +231,7 @@ export default function HostDashboardPage() {
     if (!confirm("Rotate screen token? Existing projector displays will need the new link.")) return;
     try {
       const res = await api.updateRoom(room.code, { rotate_screen_token: true });
-      if (res.room) setRoom(res.room);
-      if (res.screen_url) {
-        setScreenUrl(res.screen_url);
-      } else if (res.room?.screen_token) {
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
-        setScreenUrl(`${origin}/screen/${encodeURIComponent(res.room.screen_token)}`);
-      }
+      if (res.screen_url) setScreenUrl(res.screen_url);
       showToast("Screen display token rotated successfully");
     } catch (err: any) {
       alert(err.message || "Failed to rotate token");
@@ -350,27 +338,14 @@ export default function HostDashboardPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {screenUrl ? (
-                <Link
-                  href={screenUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
-                >
-                  <Icon name="tv" size={16} />
-                  <span>Open Venue Display</span>
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  title="Venue display is unavailable because no screen token is configured for this room."
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline text-on-surface-variant/60 font-heading font-bold text-xs cursor-not-allowed opacity-60"
-                >
-                  <Icon name="tv" size={16} />
-                  <span>Venue Display Unavailable</span>
-                </button>
-              )}
+              <Link
+                href={screenUrl}
+                target="_blank"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
+              >
+                <Icon name="tv" size={16} />
+                <span>Open Venue Display</span>
+              </Link>
 
               <button
                 onClick={() => copyToClipboard(window.location.origin + `/r/${roomCode}`, "Guest Invite URL")}
@@ -844,22 +819,12 @@ export default function HostDashboardPage() {
                     <p className="font-body text-[11px] text-on-surface-variant">
                       Invalidates projector screen token and generates a new secret URL.
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <button
-                        onClick={handleRotateToken}
-                        className="py-2 px-3 rounded-lg bg-surface-container-high text-xs font-semibold text-on-surface hover:text-primary w-fit"
-                      >
-                        Rotate Token
-                      </button>
-                      {screenUrl && (
-                        <button
-                          onClick={() => copyToClipboard(screenUrl, "Venue screen link")}
-                          className="py-2 px-3 rounded-lg bg-surface-container-high text-xs font-semibold text-on-surface hover:text-primary w-fit"
-                        >
-                          Copy Screen Link
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      onClick={handleRotateToken}
+                      className="mt-1 py-2 px-3 rounded-lg bg-surface-container-high text-xs font-semibold text-on-surface hover:text-primary w-fit"
+                    >
+                      Rotate Token
+                    </button>
                   </div>
 
                   <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-danger/10 border border-danger/30">
