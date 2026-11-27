@@ -842,3 +842,28 @@ Added a reusable `PhotoQuotaMeter` component displaying current photo count, 15-
 - `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
 
 Remaining issues: none for this issue.
+
+## 32. Issue #20 — Canvas Confetti and Spring Micro-interactions
+
+### 32.1 Summary
+
+Added a reusable, throttled canvas-confetti utility (respecting prefers-reduced-motion) triggered on meaningful success events (photo publish, poll creation, room creation), plus a subtle spring-pop micro-interaction animation for modals and poll vote confirmation.
+
+### 32.2 Implementation
+
+- `lib/confetti.ts` (new): wraps `canvas-confetti` with reduced-motion guard, throttling (1.5s), and `fireRoomConfetti`/`fireUploadConfetti`/`firePollConfetti` helpers.
+- `app/page.tsx`, `app/r/[code]/wall/page.tsx`, `app/host/[code]/page.tsx`: trigger confetti on room creation, photo publish, and poll creation success.
+- `app/globals.css`: added `spring-pop` keyframe + `.animate-spring-pop` class.
+- `components/ComposerModal.tsx`, `components/PollCard.tsx`: applied `animate-spring-pop`.
+
+### 32.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 32.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.

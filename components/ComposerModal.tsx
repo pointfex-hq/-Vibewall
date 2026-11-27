@@ -212,7 +212,7 @@ export default function ComposerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-surface-container border border-outline/50 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className="relative w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-surface-container border border-outline/50 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col animate-spring-pop">
         {/* Header with Tabs */}
         <div className="flex items-center justify-between p-4 border-b border-outline/30 bg-surface-container-low">
           <div className="flex items-center gap-2 min-w-0">

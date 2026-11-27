@@ -26,6 +26,7 @@ import StoryStrip from "@/components/StoryStrip";
 import ComposerModal, { ComposerMode } from "@/components/ComposerModal";
 import VibeCardModal from "@/components/VibeCardModal";
 import { Icon } from "@/components/icons";
+import { fireUploadConfetti } from "@/lib/confetti";
 
 export default function LiveSocialWallPage() {
   const params = useParams();
@@ -464,6 +465,7 @@ export default function LiveSocialWallPage() {
         posts: [postRes.post, ...prev.posts.filter((p) => p.id !== postRes.post.id)],
       }));
       setPhotoCooldownRemaining(20);
+      fireUploadConfetti();
       return true;
     });
   };

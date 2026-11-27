@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ThemeKey, RoomDTO } from "@/types/vibewall";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
 import { api } from "@/lib/api";
+import { fireRoomConfetti } from "@/lib/confetti";
 import { getCurrentUser, signInWithGoogle, signOut } from "@/lib/supabase";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import { Icon } from "@/components/icons";
@@ -78,6 +79,7 @@ export default function LandingHostPortal() {
         theme: selectedTheme,
         expires_in_hours: expiresInHours,
       });
+      fireRoomConfetti();
       router.push(`/host/${res.room.code}`);
     } catch (err: any) {
       setCreateError(err.message || "Failed to create room");

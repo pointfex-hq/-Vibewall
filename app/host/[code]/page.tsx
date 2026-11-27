@@ -21,6 +21,7 @@ import { THEMES, THEME_KEYS } from "@/lib/themes";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import { Icon } from "@/components/icons";
 import ErrorState from "@/components/ErrorState";
+import { firePollConfetti } from "@/lib/confetti";
 
 /**
  * Realtime sync helpers for the host dashboard (Section 6.3 — Realtime).
@@ -303,6 +304,7 @@ export default function HostDashboardPage() {
       setPollOption3("");
       setPollOption4("");
       showToast("New live poll launched!");
+      firePollConfetti();
     } catch (err: any) {
       alert(err.message || "Failed to create poll");
     } finally {

@@ -123,7 +123,7 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
       </div>
 
       {hasVoted && (
-        <p className="text-center font-body text-xs text-on-surface-variant">
+        <p className="text-center font-body text-xs text-on-surface-variant animate-spring-pop">
           ✓ Your vote is recorded in real time
         </p>
       )}
