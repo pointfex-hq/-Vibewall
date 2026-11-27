@@ -20,6 +20,7 @@ import { subscribeToRoom } from "@/lib/supabase";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import { Icon } from "@/components/icons";
+import ErrorState from "@/components/ErrorState";
 
 /**
  * Realtime sync helpers for the host dashboard (Section 6.3 — Realtime).
@@ -109,6 +110,12 @@ export default function HostDashboardPage() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{
+    status?: number;
+    code?: string;
+    message?: string;
+    isNetwork?: boolean;
+  } | null>(null);
 
   // Poll creation form
   const [pollQuestion, setPollQuestion] = useState("");
@@ -123,17 +130,29 @@ export default function HostDashboardPage() {
   const [isCreatingStory, setIsCreatingStory] = useState(false);
 
   const loadData = async () => {
+    setIsLoading(true);
+    setLoadError(null);
     try {
       const preview = await api.getRoomPreview(roomCode);
+      if (!preview.is_owner) {
+        const err = new Error("You are not the owner of this room.") as any;
+        err.status = 403;
+        err.code = "FORBIDDEN";
+        throw err;
+      }
       setRoom(preview.room);
 
       const feedData = await api.getFeed(roomCode, true);
       setFeed(feedData);
 
-      // Default venue screen URL
-      const defaultToken = "screen_token_vibe26_live";
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      setScreenUrl(`${origin}/screen/${defaultToken}`);
+      // Resolve venue screen URL from the room's actual screen token (issue #24).
+      let resolvedScreenUrl = preview.screen_url;
+      const screenToken = preview.screen_token || preview.room?.screen_token;
+      if (!resolvedScreenUrl && screenToken) {
+        resolvedScreenUrl = `${origin}/screen/${encodeURIComponent(screenToken)}`;
+      }
+      if (resolvedScreenUrl) setScreenUrl(resolvedScreenUrl);
 
       const qr = await QRCode.toDataURL(`${origin}/r/${roomCode}`, {
         width: 320,
@@ -141,8 +160,14 @@ export default function HostDashboardPage() {
         color: { dark: "#000000", light: "#FFFFFF" },
       });
       setQrCodeUrl(qr);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Dashboard load failed:", err);
+      setLoadError({
+        status: err?.status,
+        code: err?.code,
+        message: err?.message,
+        isNetwork: Boolean(err?.isNetwork),
+      });
     } finally {
       setIsLoading(false);
     }
@@ -307,6 +332,40 @@ export default function HostDashboardPage() {
       showToast(`${label} copied to clipboard!`);
     }
   };
+
+  if (loadError) {
+    return (
+      <ThemeWrapper themeKey="midnight-neon">
+        <div className="min-h-screen bg-surface text-on-surface">
+          <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
+            <div className="max-w-7xl mx-auto h-16 px-4 flex items-center justify-between">
+              <Link
+                href="/"
+                className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
+              >
+                <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
+                  <Icon name="admin_panel_settings" size={18} />
+                </div>
+                <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
+                  Host Admin Dashboard
+                </span>
+              </Link>
+            </div>
+          </header>
+          <ErrorState
+            status={loadError.status}
+            code={loadError.code}
+            message={loadError.message}
+            isNetwork={loadError.isNetwork}
+            roomCode={roomCode}
+            onRetry={loadData}
+            backHref="/"
+            backLabel="Back to Home"
+          />
+        </div>
+      </ThemeWrapper>
+    );
+  }
 
   return (
     <ThemeWrapper themeKey={room?.theme || "midnight-neon"}>

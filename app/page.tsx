@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ThemeKey } from "@/types/vibewall";
+import { ThemeKey, RoomDTO } from "@/types/vibewall";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
 import { api } from "@/lib/api";
 import { getCurrentUser, signInWithGoogle, signOut } from "@/lib/supabase";
@@ -25,8 +25,31 @@ export default function LandingHostPortal() {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
+  // Active rooms state
+  const [activeRooms, setActiveRooms] = useState<RoomDTO[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+  const [roomsError, setRoomsError] = useState<{ message: string; isNetwork?: boolean } | null>(null);
+
+  const fetchActiveRooms = async () => {
+    setIsLoadingRooms(true);
+    setRoomsError(null);
+    try {
+      const rooms = await api.getActiveRooms();
+      setActiveRooms(rooms);
+    } catch (err: any) {
+      console.error("Failed to load active rooms:", err);
+      setRoomsError({
+        message: err?.message || "Failed to load active rooms. Please check your connection and try again.",
+        isNetwork: Boolean(err?.isNetwork || err?.code === "NETWORK_ERROR"),
+      });
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  };
+
   useEffect(() => {
     getCurrentUser().then(setCurrentUser);
+    fetchActiveRooms();
   }, []);
 
   const handleJoin = (e: React.FormEvent) => {
@@ -162,7 +185,7 @@ export default function LandingHostPortal() {
               <form onSubmit={handleJoin} className="w-full sm:flex-1 relative">
                 <input
                   type="text"
-                  placeholder="Enter Room Code (e.g. VIBE26)"
+                  placeholder="Enter Room Code (e.g. FEST26)"
                   value={joinCode}
                   onChange={(e) => {
                     setJoinCode(e.target.value);
@@ -196,91 +219,153 @@ export default function LandingHostPortal() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Featured Room 1 */}
-              <div className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4 hover:border-primary/50 transition-all group">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex flex-col gap-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary/15 text-tertiary text-[11px] font-bold w-fit">
-                      <span className="relative flex h-1.5 w-1.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-tertiary"></span>
+            {/* Active Rooms Grid / States */}
+            {isLoadingRooms ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-2xl bg-surface-container/60 border border-outline/30 p-5 animate-pulse h-44 flex flex-col justify-between">
+                  <div className="h-4 bg-outline/20 rounded w-1/3 mb-2" />
+                  <div className="h-6 bg-outline/20 rounded w-3/4 mb-1" />
+                  <div className="h-3 bg-outline/20 rounded w-1/2" />
+                  <div className="h-8 bg-outline/20 rounded w-full mt-4" />
+                </div>
+                <div className="rounded-2xl bg-surface-container/60 border border-outline/30 p-5 animate-pulse h-44 hidden md:flex flex-col justify-between">
+                  <div className="h-4 bg-outline/20 rounded w-1/3 mb-2" />
+                  <div className="h-6 bg-outline/20 rounded w-3/4 mb-1" />
+                  <div className="h-3 bg-outline/20 rounded w-1/2" />
+                  <div className="h-8 bg-outline/20 rounded w-full mt-4" />
+                </div>
+              </div>
+            ) : roomsError ? (
+              <div className="rounded-2xl bg-danger/10 border border-danger/30 p-6 flex flex-col items-center text-center gap-3">
+                <Icon name="error" size={32} className="text-danger" />
+                <div className="flex flex-col gap-1">
+                  <h3 className="font-heading font-bold text-sm text-on-surface">
+                    {roomsError.isNetwork ? "Network Connection Error" : "Failed to Load Active Rooms"}
+                  </h3>
+                  <p className="font-body text-xs text-on-surface-variant max-w-sm">
+                    {roomsError.message}
+                  </p>
+                </div>
+                <button
+                  onClick={fetchActiveRooms}
+                  className="py-2 px-4 rounded-xl font-heading font-bold text-xs bg-surface-container-high border border-outline text-on-surface hover:bg-surface-container-highest transition-colors flex items-center gap-1.5"
+                >
+                  <Icon name="refresh" size={16} />
+                  <span>Retry</span>
+                </button>
+              </div>
+            ) : activeRooms.length === 0 ? (
+              <div className="rounded-2xl bg-surface-container border border-outline/40 p-8 flex flex-col items-center text-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-primary-container/20 border border-primary/30 flex items-center justify-center text-primary">
+                  <Icon name="bolt" size={24} />
+                </div>
+                <h3 className="font-heading font-extrabold text-base text-on-surface">
+                  No Active Rooms Right Now
+                </h3>
+                <p className="font-body text-xs text-on-surface-variant max-w-sm">
+                  There are currently no active public events. Be the first to launch a live room and get the crowd engaged!
+                </p>
+                <button
+                  onClick={() => setIsCreateOpen(true)}
+                  className="mt-2 py-2 px-4 rounded-xl font-heading font-bold text-xs bg-primary text-on-primary hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5"
+                >
+                  <Icon name="add_circle" size={16} />
+                  <span>Create the First Room</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeRooms.map((room) => (
+                  <div
+                    key={room.code}
+                    className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4 hover:border-primary/50 transition-all group"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-1">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary/15 text-tertiary text-[11px] font-bold w-fit">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-tertiary"></span>
+                          </span>
+                          <span className="uppercase">{room.status} EVENT</span>
+                        </div>
+                        <h3 className="font-heading font-extrabold text-lg text-on-surface group-hover:text-primary transition-colors">
+                          {room.title}
+                        </h3>
+                        <p className="font-body text-xs text-on-surface-variant capitalize">
+                          Theme: {room.theme ? room.theme.replace("-", " ") : "Midnight Neon"}
+                        </p>
+                      </div>
+
+                      <span className="px-2.5 py-1 rounded-xl bg-surface-container-highest border border-outline/40 font-heading font-bold text-xs text-primary">
+                        {room.code}
                       </span>
-                      <span>LIVE • 124 Guests</span>
                     </div>
-                    <h3 className="font-heading font-extrabold text-lg text-on-surface group-hover:text-primary transition-colors">
-                      Dynamic University Fest 2026
+
+                    <div className="flex items-center gap-2 pt-2 border-t border-outline/20">
+                      <Link
+                        href={`/r/${room.code}`}
+                        className="flex-1 py-2 px-3 rounded-xl bg-primary text-on-primary font-heading font-bold text-xs text-center hover:brightness-110 transition-all"
+                      >
+                        Join Social Wall
+                      </Link>
+                      <Link
+                        href={`/host/${room.code}`}
+                        className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-semibold text-on-surface transition-all"
+                      >
+                        Host Admin
+                      </Link>
+                      {room.screen_token && (
+                        <Link
+                          href={`/screen/${encodeURIComponent(room.screen_token)}`}
+                          target="_blank"
+                          className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-semibold text-on-surface transition-all"
+                          title="Open 16:9 Venue Display Screen"
+                        >
+                          <Icon name="tv" size={16} />
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Sample Theme Preview Showcase */}
+                <div className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-secondary">
+                      Design System Highlights
+                    </span>
+                    <h3 className="font-heading font-extrabold text-lg text-on-surface">
+                      4 Official Event Themes
                     </h3>
                     <p className="font-body text-xs text-on-surface-variant">
-                      Central Auditorium, SEU • Theme: Midnight Neon
+                      Midnight Neon, Minimal Paper, Campus Sunset, and Emerald Fest with instant Realtime synchronisation.
                     </p>
                   </div>
 
-                  <span className="px-2.5 py-1 rounded-xl bg-surface-container-highest border border-outline/40 font-heading font-bold text-xs text-primary">
-                    VIBE26
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-outline/20">
-                  <Link
-                    href="/r/VIBE26"
-                    className="flex-1 py-2 px-3 rounded-xl bg-primary text-on-primary font-heading font-bold text-xs text-center hover:brightness-110 transition-all"
-                  >
-                    Join Social Wall
-                  </Link>
-                  <Link
-                    href="/host/VIBE26"
-                    className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-semibold text-on-surface transition-all"
-                  >
-                    Host Admin
-                  </Link>
-                  <Link
-                    href="/screen/screen_token_vibe26_live"
-                    target="_blank"
-                    className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-semibold text-on-surface transition-all"
-                    title="Open 16:9 Venue Display Screen"
-                  >
-                    <Icon name="tv" size={16} />
-                  </Link>
-                </div>
-              </div>
-
-              {/* Sample Theme Preview Showcase */}
-              <div className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-secondary">
-                    Design System Highlights
-                  </span>
-                  <h3 className="font-heading font-extrabold text-lg text-on-surface">
-                    4 Official Event Themes
-                  </h3>
-                  <p className="font-body text-xs text-on-surface-variant">
-                    Midnight Neon, Minimal Paper, Campus Sunset, and Emerald Fest with instant Realtime synchronisation.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-4 gap-2 pt-2 border-t border-outline/20">
-                  {THEME_KEYS.map((k) => (
-                    <div
-                      key={k}
-                      className="p-2 rounded-xl text-center flex flex-col items-center gap-1 border border-outline/40"
-                      style={{ backgroundColor: THEMES[k].bg }}
-                    >
-                      <span
-                        className="w-3.5 h-3.5 rounded-full shadow-sm"
-                        style={{ backgroundColor: THEMES[k].accent }}
-                      />
-                      <span
-                        className="text-[9px] font-bold truncate max-w-full"
-                        style={{ color: THEMES[k].text }}
+                  <div className="grid grid-cols-4 gap-2 pt-2 border-t border-outline/20">
+                    {THEME_KEYS.map((k) => (
+                      <div
+                        key={k}
+                        className="p-2 rounded-xl text-center flex flex-col items-center gap-1 border border-outline/40"
+                        style={{ backgroundColor: THEMES[k].bg }}
                       >
-                        {THEMES[k].name.split(" ")[0]}
-                      </span>
-                    </div>
-                  ))}
+                        <span
+                          className="w-3.5 h-3.5 rounded-full shadow-sm"
+                          style={{ backgroundColor: THEMES[k].accent }}
+                        />
+                        <span
+                          className="text-[9px] font-bold truncate max-w-full"
+                          style={{ color: THEMES[k].text }}
+                        >
+                          {THEMES[k].name.split(" ")[0]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </main>
 

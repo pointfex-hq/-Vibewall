@@ -646,3 +646,33 @@ E2E: `Composer Shows Authenticated Identity` added and passing; full suite → *
 Remaining issues: none.
 
 ---
+
+## 23. Issue #24 — Home Navigation, Demo Room Dependency and API Error Handling (P0)
+
+### 23.1 Summary
+
+Landing page previously hardcoded a fake `VIBE26` room card ("Dynamic University Fest 2026", "LIVE • 124 Guests", "Central Auditorium, SEU") linking to `/r/VIBE26`, `/host/VIBE26`, and `/screen/screen_token_vibe26_live`. Invalid room codes silently rendered empty fake shells. Mock screen-token lookup fell back to the demo room. Host dashboard rendered fake "Room Status: Open" for missing rooms and never verified `is_owner`. Venue screen looped forever on invalid tokens.
+
+### 23.2 Implementation
+
+- `app/page.tsx`: replaced hardcoded room card with a real `api.getActiveRooms()`-driven grid, plus loading skeleton, network/error state with Retry, and empty state ("No Active Rooms Right Now"). `Create the First Room` CTA.
+- `app/api/[...path]/route.ts`: added `GET /api/rooms` listing endpoint; feed endpoint now 404s for missing rooms; room preview returns `screen_token`/`screen_url`; screen endpoint rejects unknown tokens (no fallback).
+- `lib/mock-data.ts`: added `getActiveRooms()`, `clearRooms()`, `resetStore()`; removed `VIBE26` fallback in `getRoomByToken()`; `getFeed()` now throws 404 for missing rooms.
+- `lib/api.ts`: network-error handling (status 0, code `NETWORK_ERROR`, `isNetwork`), consistent HTTP error codes (UNAUTHORIZED/FORBIDDEN/NOT_FOUND/SERVER_ERROR); `getActiveRooms()`; mock fallbacks preserve server error semantics (no silent collapse into 404); `getRoomPreview`/`getFeed`/`getScreenData` return structured errors.
+- `components/ErrorState.tsx`: reusable 401/403/404/500/network error UI with Retry and Sign-In actions.
+- `app/r/[code]/page.tsx`, `app/r/[code]/wall/page.tsx`, `app/r/[code]/story/[storyId]/page.tsx`, `app/host/[code]/page.tsx`, `app/screen/[token]/page.tsx`: wired `ErrorState` with structured status/code/isNetwork, loading states, retry; host page enforces `is_owner` (403 otherwise) and resolves `screen_url` from the room's real screen token (no hardcoded demo token).
+- `types/vibewall.ts`: added `screen_token?` and `screen_url?` to `RoomDTO` and `RoomPreviewResponse`.
+
+### 23.3 Tests
+
+- `tests/regression-navigation-errors.mjs`: 18 assertions covering valid room, missing room (404), 401, 403, 500, offline/network, empty landing, host 403, screen 404 — all passing.
+- Existing `tests/e2e-ui-test.mjs`: still **52/52 PASS**.
+
+### 23.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+- `node tests/e2e-ui-test.mjs` → 52/52 PASS.
+
+Remaining issues: none for this issue.

@@ -17,7 +17,7 @@ import {
   UpdateRoomResponse,
 } from "@/types/vibewall";
 import { supabase } from "./supabase";
-import { mockDB } from "./mock-data";
+import { mockDB, getMockStore } from "./mock-data";
 import { isMockMode, isSupabaseConfigured } from "./config";
 
 // Mock API is used when mock mode is explicitly enabled or when real Supabase
@@ -43,13 +43,24 @@ async function getAuthHeader(): Promise<HeadersInit> {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = await getAuthHeader();
-  const res = await fetch(path, {
-    ...options,
-    headers: {
-      ...headers,
-      ...(options.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    });
+  } catch (netErr: any) {
+    const err = new Error(
+      netErr?.message || "Network connection error. Please check your internet connection."
+    ) as any;
+    err.status = 0;
+    err.code = "NETWORK_ERROR";
+    err.isNetwork = true;
+    throw err;
+  }
 
   if (!res.ok) {
     let errorJson: any = null;
@@ -59,7 +70,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const message = errorJson?.error?.message || `HTTP error ${res.status}`;
     const err = new Error(message) as any;
     err.status = res.status;
-    err.code = errorJson?.error?.code || "REQUEST_FAILED";
+    err.code =
+      errorJson?.error?.code ||
+      (res.status === 401
+        ? "UNAUTHORIZED"
+        : res.status === 403
+        ? "FORBIDDEN"
+        : res.status === 404
+        ? "NOT_FOUND"
+        : res.status >= 500
+        ? "SERVER_ERROR"
+        : "REQUEST_FAILED");
+    err.isNetwork = false;
     throw err;
   }
 
@@ -86,16 +108,56 @@ export const api = {
     });
   },
 
+  // 1b. GET /api/rooms - List active public rooms
+  async getActiveRooms(): Promise<RoomDTO[]> {
+    if (USE_MOCK) {
+      return mockDB.getActiveRooms();
+    }
+    try {
+      const res = await request<{ rooms: RoomDTO[] }>("/api/rooms");
+      return res.rooms || [];
+    } catch (err: any) {
+      if (err?.status === 404) return [];
+      throw err;
+    }
+  },
+
   // 2. GET /api/rooms/[code]
   async getRoomPreview(code: string): Promise<RoomPreviewResponse> {
     if (USE_MOCK) {
-      const room = mockDB.getRoom(code);
+      let room = mockDB.getRoom(code);
+      if (!room && typeof window !== "undefined") {
+        try {
+          const res = await request<RoomPreviewResponse>(`/api/rooms/${code}`);
+          if (res?.room) {
+            const store = getMockStore();
+            store.rooms.set(code.toUpperCase(), res.room as any);
+            return res;
+          }
+        } catch (err: any) {
+          // Preserve the server's failure semantics (issue #24): a 401/403/5xx or
+          // a network outage must NOT be silently collapsed into "Room not found".
+          // Only a genuine 404 (or successful-but-empty) response falls through to
+          // the local 404 below.
+          if (err?.isNetwork || (err?.status && err.status !== 404)) throw err;
+        }
+      }
       if (!room) {
         const err = new Error("Room not found") as any;
         err.status = 404;
+        err.code = "NOT_FOUND";
         throw err;
       }
-      return { room, is_owner: true, is_member: true };
+      const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      const screen_token = room.screen_token;
+      const screen_url = screen_token ? `${origin}/screen/${encodeURIComponent(screen_token)}` : undefined;
+      return {
+        room,
+        is_owner: true,
+        is_member: true,
+        screen_token,
+        screen_url,
+      };
     }
     return request<RoomPreviewResponse>(`/api/rooms/${code}`);
   },
@@ -127,8 +189,32 @@ export const api = {
   ): Promise<UpdateRoomResponse> {
     if (USE_MOCK) {
       const res = mockDB.updateRoom(code, updates);
-      if (!res) throw new Error("Room not found");
-      return res;
+      if (res) {
+        if (typeof window !== "undefined") {
+          try {
+            await request<UpdateRoomResponse>(`/api/rooms/${code}`, {
+              method: "PATCH",
+              body: JSON.stringify(updates),
+            });
+          } catch {}
+        }
+        return res;
+      }
+      if (typeof window !== "undefined") {
+        const serverRes = await request<UpdateRoomResponse>(`/api/rooms/${code}`, {
+          method: "PATCH",
+          body: JSON.stringify(updates),
+        });
+        if (serverRes?.room) {
+          const store = getMockStore();
+          store.rooms.set(code.toUpperCase(), serverRes.room as any);
+        }
+        return serverRes;
+      }
+      const err = new Error("Room not found") as any;
+      err.status = 404;
+      err.code = "NOT_FOUND";
+      throw err;
     }
     return request<UpdateRoomResponse>(`/api/rooms/${code}`, {
       method: "PATCH",
@@ -139,6 +225,15 @@ export const api = {
   // 5. GET /api/rooms/[code]/feed
   async getFeed(code: string, includeHidden = false): Promise<FeedResponse> {
     if (USE_MOCK) {
+      const room = mockDB.getRoom(code);
+      if (!room && typeof window !== "undefined") {
+        const query = includeHidden ? "?include_hidden=true" : "";
+        try {
+          return await request<FeedResponse>(`/api/rooms/${code}/feed${query}`);
+        } catch (err: any) {
+          throw err;
+        }
+      }
       return mockDB.getFeed(code, includeHidden);
     }
     const query = includeHidden ? "?include_hidden=true" : "";
@@ -148,10 +243,23 @@ export const api = {
   // 6. GET /api/screen/[token]
   async getScreenData(token: string): Promise<ScreenResponse> {
     if (USE_MOCK) {
-      const room = mockDB.getRoomByToken(token);
+      let room = mockDB.getRoomByToken(token);
+      if (!room && typeof window !== "undefined") {
+        try {
+          const res = await request<ScreenResponse>(`/api/screen/${token}`);
+          if (res?.room) {
+            const store = getMockStore();
+            store.rooms.set(res.room.code.toUpperCase(), res.room as any);
+            return res;
+          }
+        } catch (err: any) {
+          throw err;
+        }
+      }
       if (!room) {
         const err = new Error("Screen token invalid or room not found") as any;
         err.status = 404;
+        err.code = "NOT_FOUND";
         throw err;
       }
       const feed = mockDB.getFeed(room.code, false);

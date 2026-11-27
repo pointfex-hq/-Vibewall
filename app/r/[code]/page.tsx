@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { getAuthState, signInWithGoogle } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import ErrorState from "@/components/ErrorState";
 import { Icon } from "@/components/icons";
 
 export default function QrEntryAuthGate() {
@@ -23,6 +24,11 @@ export default function QrEntryAuthGate() {
   const [isJoining, setIsJoining] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorInfo, setErrorInfo] = useState<{
+    status?: number;
+    code?: string;
+    isNetwork?: boolean;
+  } | null>(null);
   const [manualCode, setManualCode] = useState(roomCode);
 
   // Duplicate-join guards
@@ -33,11 +39,17 @@ export default function QrEntryAuthGate() {
     async function loadData() {
       setIsLoading(true);
       setErrorMessage("");
+      setErrorInfo(null);
       try {
         const res = await api.getRoomPreview(roomCode);
         setRoom(res.room);
       } catch (err: any) {
         setErrorMessage(err.message || "Unable to find or verify this room.");
+        setErrorInfo({
+          status: err?.status,
+          code: err?.code,
+          isNetwork: Boolean(err?.isNetwork),
+        });
       } finally {
         setIsLoading(false);
       }
@@ -176,15 +188,21 @@ export default function QrEntryAuthGate() {
               </span>
             </div>
           ) : errorMessage ? (
-            <div className="rounded-2xl bg-danger/10 border border-danger/30 p-6 flex flex-col items-center text-center gap-3">
-              <Icon name="warning" size={40} className="text-danger" />
-              <h2 className="font-heading font-bold text-lg text-danger">
-                Room Not Found
-              </h2>
-              <p className="font-body text-xs text-on-surface-variant">
-                {errorMessage}
-              </p>
-              <form onSubmit={handleManualSubmit} className="w-full mt-2 flex gap-2">
+            <div className="flex flex-col gap-4">
+              <ErrorState
+                status={errorInfo?.status}
+                code={errorInfo?.code}
+                message={errorMessage}
+                isNetwork={errorInfo?.isNetwork}
+                roomCode={roomCode}
+                onRetry={() => {
+                  if (typeof window !== "undefined") window.location.reload();
+                }}
+                backHref="/"
+                backLabel="Back to Home"
+                showHomeButton
+              />
+              <form onSubmit={handleManualSubmit} className="w-full flex gap-2">
                 <input
                   type="text"
                   placeholder="Enter 6-char code"

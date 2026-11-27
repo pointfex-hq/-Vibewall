@@ -8,6 +8,7 @@ import { ScreenResponse, RoomDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { subscribeToRoom } from "@/lib/supabase";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import ErrorState from "@/components/ErrorState";
 import { Icon } from "@/components/icons";
 
 export default function VenueDisplayPage() {
@@ -19,10 +20,18 @@ export default function VenueDisplayPage() {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<{
+    status?: number;
+    code?: string;
+    message?: string;
+    isNetwork?: boolean;
+  } | null>(null);
 
   // Load initial screen data
   useEffect(() => {
     async function loadScreen() {
+      setIsLoading(true);
+      setLoadError(null);
       try {
         const data = await api.getScreenData(screenToken);
         setScreenData(data);
@@ -38,8 +47,14 @@ export default function VenueDisplayPage() {
           },
         });
         setQrCodeDataUrl(qr);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Venue screen load failed:", err);
+        setLoadError({
+          status: err?.status,
+          code: err?.code,
+          message: err?.message,
+          isNetwork: Boolean(err?.isNetwork),
+        });
       } finally {
         setIsLoading(false);
       }
@@ -170,6 +185,27 @@ export default function VenueDisplayPage() {
       }
     }
   };
+
+  if (loadError) {
+    return (
+      <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <ErrorState
+            status={loadError.status}
+            code={loadError.code}
+            message={loadError.message || "Invalid screen token. Please check the projector link."}
+            isNetwork={loadError.isNetwork}
+            onRetry={() => {
+              if (typeof window !== "undefined") window.location.reload();
+            }}
+            backHref="/"
+            backLabel="Back to Home"
+            showHomeButton
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !screenData) {
     return (

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { StoryDTO, StoryEntryDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { validateAndCompressImage } from "@/lib/upload/compress";
+import ErrorState from "@/components/ErrorState";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
@@ -25,6 +26,12 @@ export default function ChainStoryViewer() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [loadError, setLoadError] = useState<{
+    status?: number;
+    code?: string;
+    message?: string;
+    isNetwork?: boolean;
+  } | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const auth = useAuth();
@@ -51,6 +58,7 @@ export default function ChainStoryViewer() {
   useEffect(() => {
     async function loadStory() {
       setIsLoading(true);
+      setLoadError(null);
       try {
         const feed = await api.getFeed(roomCode);
         if (feed.active_story && feed.active_story.id === storyId) {
@@ -61,7 +69,12 @@ export default function ChainStoryViewer() {
           setErrorMessage("Story not found or expired.");
         }
       } catch (err: any) {
-        setErrorMessage(err.message || "Failed to load story");
+        setLoadError({
+          status: err?.status,
+          code: err?.code,
+          message: err?.message,
+          isNetwork: Boolean(err?.isNetwork),
+        });
       } finally {
         setIsLoading(false);
       }
@@ -176,6 +189,24 @@ export default function ChainStoryViewer() {
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
             <Icon name="progress_activity" size={36} className="animate-spin text-primary" />
             <span className="font-heading text-sm">Loading Chain Story...</span>
+          </div>
+        ) : loadError ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="w-full max-w-sm">
+              <ErrorState
+                status={loadError.status}
+                code={loadError.code}
+                message={loadError.message}
+                isNetwork={loadError.isNetwork}
+                roomCode={roomCode}
+                onRetry={() => {
+                  if (typeof window !== "undefined") window.location.reload();
+                }}
+                backHref={`/r/${roomCode}/wall`}
+                backLabel="Back to Wall"
+                showHomeButton
+              />
+            </div>
           </div>
         ) : !story || story.entries.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">

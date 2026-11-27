@@ -17,6 +17,7 @@ import { subscribeToRoom, getAuthState } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
+import ErrorState from "@/components/ErrorState";
 import PhotoCard from "@/components/PhotoCard";
 import NoteCard from "@/components/NoteCard";
 import PollCard from "@/components/PollCard";
@@ -39,6 +40,12 @@ export default function LiveSocialWallPage() {
   });
 
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<{
+    status?: number;
+    code?: string;
+    message?: string;
+    isNetwork?: boolean;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "photos" | "notes">("all");
   const [copiedToast, setCopiedToast] = useState(false);
 
@@ -113,23 +120,31 @@ export default function LiveSocialWallPage() {
   const [selectedPostForVibeCard, setSelectedPostForVibeCard] = useState<PostDTO | null>(null);
 
   // Fetch initial room & feed data
-  useEffect(() => {
-    async function loadWall() {
-      setIsLoading(true);
-      try {
-        const preview = await api.getRoomPreview(roomCode);
-        setRoom(preview.room);
+  const loadWall = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const preview = await api.getRoomPreview(roomCode);
+      setRoom(preview.room);
 
-        const feedData = await api.getFeed(roomCode);
-        setFeed(feedData);
-      } catch (err) {
-        console.error("Failed to load wall:", err);
-      } finally {
-        setIsLoading(false);
-      }
+      const feedData = await api.getFeed(roomCode);
+      setFeed(feedData);
+    } catch (err: any) {
+      console.error("Failed to load wall:", err);
+      setLoadError({
+        status: err?.status,
+        code: err?.code,
+        message: err?.message,
+        isNetwork: Boolean(err?.isNetwork),
+      });
+    } finally {
+      setIsLoading(false);
     }
-    if (roomCode) loadWall();
   }, [roomCode]);
+
+  useEffect(() => {
+    if (roomCode) loadWall();
+  }, [roomCode, loadWall]);
 
   // Realtime subscription
   useEffect(() => {
@@ -441,6 +456,40 @@ export default function LiveSocialWallPage() {
     });
   };
 
+  if (loadError) {
+    return (
+      <ThemeWrapper themeKey="midnight-neon">
+        <div className="min-h-screen bg-surface text-on-surface">
+          <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
+            <div className="max-w-2xl mx-auto h-16 px-4 flex items-center justify-between">
+              <Link
+                href="/"
+                className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
+              >
+                <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
+                  <Icon name="sensors" size={18} />
+                </div>
+                <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
+                  VibeWall
+                </span>
+              </Link>
+            </div>
+          </header>
+          <ErrorState
+            status={loadError.status}
+            code={loadError.code}
+            message={loadError.message}
+            isNetwork={loadError.isNetwork}
+            roomCode={roomCode}
+            onRetry={loadWall}
+            backHref="/"
+            backLabel="Back to Home"
+          />
+        </div>
+      </ThemeWrapper>
+    );
+  }
+
   return (
     <ThemeWrapper themeKey={room?.theme || "midnight-neon"}>
       <div className="flex flex-col min-h-screen bg-surface text-on-surface pb-28">
@@ -487,6 +536,12 @@ export default function LiveSocialWallPage() {
 
         {/* Main Feed Container */}
         <main className="max-w-2xl mx-auto w-full px-4 pt-4 flex flex-col gap-5">
+          {isLoading && (
+            <div className="py-16 text-center text-on-surface-variant flex flex-col items-center gap-3">
+              <Icon name="progress_activity" size={32} className="animate-spin text-primary" />
+              <p className="font-heading font-semibold text-sm">Loading live wall…</p>
+            </div>
+          )}
           {/* Action notice toast (errors from likes, votes, etc.) */}
           {actionNotice && (
             <div
