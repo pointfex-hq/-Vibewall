@@ -700,7 +700,7 @@ export default function HostDashboardPage() {
                           ? "border-primary ring-2 ring-primary/50"
                           : "border-outline/40 hover:border-outline"
                       }`}
-                      style={{ backgroundColor: t.bg }}
+                      style={{ backgroundColor: t.bg, color: t.text }}
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-heading font-extrabold text-sm" style={{ color: t.text }}>
@@ -721,9 +721,14 @@ export default function HostDashboardPage() {
                         disabled={isActive}
                         className={`w-full py-2 px-3 rounded-xl font-heading font-bold text-xs transition-all ${
                           isActive
-                            ? "bg-white/20 text-white cursor-default"
+                            ? "cursor-default"
                             : "bg-primary text-on-primary hover:brightness-110"
                         }`}
+                        style={
+                          isActive
+                            ? { backgroundColor: `${t.text}26`, color: t.text }
+                            : undefined
+                        }
                       >
                         {isActive ? "Active Theme" : "Activate Theme"}
                       </button>

@@ -774,3 +774,23 @@ Fixed the responsive navigation issue that hid the Sign Out button below 640px b
 - `npm run build` → PASSED (`Compiled successfully`).
 
 Remaining issues: none for this issue.
+
+## 29. Issue #33 — Minimal Paper Theme Contrast and Button Readability
+
+### 29.1 Summary
+
+Fixed the Minimal Paper light theme where white text on light backgrounds produced ~1.04:1 contrast. Made theme preview cards theme-aware (container color + active button use the theme's own text token instead of hardcoded white).
+
+### 29.2 Implementation
+
+- `app/host/[code]/page.tsx`: theme preview card container now sets `color: t.text`; active-theme button uses `backgroundColor: t.text` (translucent) + `color: t.text` instead of `bg-white/20 text-white`.
+
+### 29.3 Verification
+
+- Contrast probe (Minimal Paper, host dashboard): no text pair below 4.5:1.
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 52/52 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none for this issue.
