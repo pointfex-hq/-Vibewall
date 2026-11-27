@@ -867,3 +867,23 @@ Added a reusable, throttled canvas-confetti utility (respecting prefers-reduced-
 - `npm run build` → PASSED (`Compiled successfully`).
 
 Remaining issues: none for this issue.
+
+## 33. Issue #25 — Chain Story Add Photo Upload Routing (verified + frame preview fix)
+
+### 33.1 Summary
+
+Verified that Chain Story Add Photo uploads already route exclusively to `api.addStoryEntry` (not `api.createPost`); added a frame preview so "Choose Frame Style" visually updates the composer preview (was a no-op visually).
+
+### 33.2 Implementation
+
+- `components/ComposerModal.tsx`: added `getFrameClasses` (mirroring `PhotoCard`) and applied it to the preview container so changing the frame updates the preview; kept story-entry mode hiding the frame selector.
+
+### 33.3 Verification
+
+- Manual test: posts stayed at 4, story entries 3 → 4, no duplicate wall post.
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 53/53 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none for this issue.

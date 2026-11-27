@@ -210,6 +210,21 @@ export default function ComposerModal({
     { id: "sunset", name: "Sunset", color: "border-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.4)]" },
   ];
 
+  // Mirrors PhotoCard's frame classes so the selected frame is visible in the
+  // composer preview (issue #25).
+  const getFrameClasses = (frameId: string) => {
+    switch (frameId) {
+      case "neon":
+        return "p-2 rounded-2xl bg-gradient-to-tr from-purple-600/40 via-violet-500/20 to-fuchsia-500/40 border border-purple-500/50 shadow-[0_0_20px_rgba(139,92,246,0.3)]";
+      case "fest26":
+        return "p-2 rounded-2xl bg-gradient-to-r from-pink-500/40 via-purple-600/30 to-indigo-500/40 border border-pink-500/60 shadow-[0_0_20px_rgba(236,72,153,0.35)]";
+      case "sunset":
+        return "p-2 rounded-2xl bg-gradient-to-br from-amber-500/30 via-orange-500/20 to-rose-500/30 border border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.25)]";
+      default:
+        return "p-1 rounded-2xl border border-white/10";
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg rounded-t-3xl sm:rounded-3xl bg-surface-container border border-outline/50 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col animate-spring-pop">
@@ -314,13 +329,15 @@ export default function ComposerModal({
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  <div className="relative w-full aspect-[4/5] rounded-2xl overflow-hidden bg-surface-container-lowest border border-outline">
-                    <Image
-                      src={previewResult.previewUrl}
-                      alt="Upload preview"
-                      fill
-                      className="object-cover"
-                    />
+                  <div className={`relative w-full aspect-[4/5] rounded-2xl overflow-hidden ${getFrameClasses(selectedFrame)}`}>
+                    <div className="relative w-full h-full rounded-xl overflow-hidden bg-surface-container-lowest">
+                      <Image
+                        src={previewResult.previewUrl}
+                        alt="Upload preview"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -329,12 +346,12 @@ export default function ComposerModal({
                         setPreviewResult(null);
                         setSelectedFile(null);
                       }}
-                      className="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1 hover:bg-black/90"
+                      className="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1 hover:bg-black/90 z-10"
                     >
                       <Icon name="refresh" size={14} />
                       Change
                     </button>
-                    <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px]">
+                    <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px] z-10">
                       {(previewResult.compressedSize / 1024 / 1024).toFixed(2)} MB • {previewResult.width}×{previewResult.height}
                     </div>
                   </div>
