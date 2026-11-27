@@ -195,8 +195,10 @@ export default function HostDashboardPage() {
         );
       },
       onPollUpdated: ({ poll }) => {
-        // Mirror the live wall: poll_updated carries the authoritative active poll.
-        setFeed((prev) => ({ ...prev, active_poll: poll }));
+        setFeed((prev) => {
+          if (prev.active_poll && prev.active_poll.id !== poll.id) return prev;
+          return { ...prev, active_poll: poll };
+        });
       },
       onThemeUpdated: ({ theme }) => {
         setRoom((prev) => (prev ? { ...prev, theme } : prev));

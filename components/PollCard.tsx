@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { PollDTO } from "@/types/vibewall";
 import { Icon } from "@/components/icons";
 
@@ -15,19 +15,22 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
     poll.user_voted_option_id
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // Synchronize local selection when the poll identity or its voted state
   // changes (e.g. a new poll launched via realtime) so stale selections from a
-  // previous poll are never carried over.
+  // previous poll are never carried over. Never clobber an in-flight vote.
   useEffect(() => {
+    if (isSubmitting) return;
     setSelectedOptionId(poll.user_voted_option_id);
-  }, [poll.id, poll.user_voted_option_id]);
+  }, [poll.id, poll.user_voted_option_id, isSubmitting]);
 
   const hasVoted = Boolean(selectedOptionId);
   const totalVotes = poll.total_votes || 1; // avoid division by 0
 
   const handleVote = async (optionId: string) => {
-    if (hasVoted || isSubmitting) return;
+    if (hasVoted || submittingRef.current) return;
+    submittingRef.current = true;
     const previousSelected = selectedOptionId;
     setIsSubmitting(true);
     setSelectedOptionId(optionId);
@@ -41,6 +44,7 @@ export default function PollCard({ poll, onVote, className = "" }: PollCardProps
       // Vote request failed — revert the optimistic selection.
       setSelectedOptionId(previousSelected);
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };

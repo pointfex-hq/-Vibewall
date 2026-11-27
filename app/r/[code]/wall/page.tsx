@@ -55,6 +55,7 @@ export default function LiveSocialWallPage() {
     Record<string, { liked: boolean; count: number }>
   >({});
   const likeInFlightRef = useRef<Set<string>>(new Set());
+  const likeActionIdRef = useRef<Record<string, number>>({});
   const pollInFlightRef = useRef<Set<string>>(new Set());
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
@@ -218,7 +219,13 @@ export default function LiveSocialWallPage() {
         });
       },
       onPollUpdated: ({ poll }) => {
-        setFeed((prev) => ({ ...prev, active_poll: poll }));
+        setFeed((prev) => {
+          // Do not let a stale poll_updated overwrite a newly launched poll
+          // (issue #26). Only apply when there is no active poll or the ids
+          // match.
+          if (prev.active_poll && prev.active_poll.id !== poll.id) return prev;
+          return { ...prev, active_poll: poll };
+        });
       },
       onThemeUpdated: ({ theme }) => {
         setRoom((prev) => (prev ? { ...prev, theme } : prev));
@@ -279,6 +286,11 @@ export default function LiveSocialWallPage() {
     if (likeInFlightRef.current.has(targetId)) return false;
     likeInFlightRef.current.add(targetId);
 
+    // Track this action so a delayed/out-of-order response cannot overwrite a
+    // newer user action (issue #26).
+    const actionId = (likeActionIdRef.current[targetId] || 0) + 1;
+    likeActionIdRef.current[targetId] = actionId;
+
     const base = getLikeBase(targetType, targetId);
     const optimistic = {
       liked: !base.liked,
@@ -288,6 +300,8 @@ export default function LiveSocialWallPage() {
 
     try {
       const res = await api.toggleLike(targetType, targetId);
+      // Ignore stale responses from an earlier toggle.
+      if (likeActionIdRef.current[targetId] !== actionId) return true;
       // Reconcile with the authoritative response and update the feed.
       setOptimisticLikes((prev) => {
         const next = { ...prev };
@@ -311,13 +325,15 @@ export default function LiveSocialWallPage() {
       }));
       return true;
     } catch (err: any) {
-      // Roll back the optimistic like; the cards fall back to authoritative props.
-      setOptimisticLikes((prev) => {
-        const next = { ...prev };
-        delete next[targetId];
-        return next;
-      });
-      showActionNotice(err?.message || "Failed to update like. Please try again.");
+      // Only roll back if this is still the latest action.
+      if (likeActionIdRef.current[targetId] === actionId) {
+        setOptimisticLikes((prev) => {
+          const next = { ...prev };
+          delete next[targetId];
+          return next;
+        });
+        showActionNotice(err?.message || "Failed to update like. Please try again.");
+      }
       return false;
     } finally {
       likeInFlightRef.current.delete(targetId);
@@ -370,7 +386,13 @@ export default function LiveSocialWallPage() {
       pollInFlightRef.current.add(poll.id);
       try {
         const res = await api.votePoll(poll.id, optionId);
-        setFeed((prev) => ({ ...prev, active_poll: res.poll }));
+        // Only apply if the same poll is still active (issue #26): a newly
+        // launched poll must not be overwritten by a stale vote response.
+        setFeed((prev) =>
+          prev.active_poll && prev.active_poll.id === poll.id
+            ? { ...prev, active_poll: res.poll }
+            : prev
+        );
         return true;
       } catch (err: any) {
         if (err?.status === 401) {
