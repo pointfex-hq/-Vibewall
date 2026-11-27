@@ -676,3 +676,30 @@ Landing page previously hardcoded a fake `VIBE26` room card ("Dynamic University
 - `node tests/e2e-ui-test.mjs` → 52/52 PASS.
 
 Remaining issues: none for this issue.
+
+## 25. Issue #26 — Optimistic Like/Vote Rollback and Poll State Reset
+
+### 25.1 Summary
+
+Fixed failed like/vote operations leaving the UI in an incorrect state and stale poll state preventing guests from voting in a newly launched poll.
+
+### 25.2 Implementation
+
+- `app/r/[code]/wall/page.tsx`:
+  - `runLikeAction`: added per-target action-id tracking so a delayed/out-of-order response cannot overwrite a newer user action or roll back a newer optimistic state.
+  - `handlePollVote`: only applies the server result when the same poll is still active (guards against a newly launched poll being overwritten by a stale vote response).
+  - Realtime `onPollUpdated`: skips stale poll payloads whose id differs from the active poll.
+- `app/host/[code]/page.tsx`: same stale-poll guard in `onPollUpdated`.
+- `components/PollCard.tsx`: added `submittingRef` guard against duplicate rapid votes; `useEffect` sync skips while submitting; reverts `selectedOptionId` on failure.
+
+### 25.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 25.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.
