@@ -14,6 +14,10 @@
   --vw-accent-container: rgba(139, 92, 246, 0.2);
   --vw-on-accent: #FFFFFF;
   --vw-border: #27272A;
+
+  /* Centrally defined font variables (match fonts loaded in app/layout.tsx). */
+  --font-inter: "Inter";
+  --font-jakarta: "Plus Jakarta Sans";
 }
 
 @layer base {
@@ -34,6 +38,18 @@
 
   body {
     overscroll-behavior-y: none;
+  }
+
+  /* Respect reduced-motion preferences (issue #27). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   h1, h2, h3, h4, h5, h6 {

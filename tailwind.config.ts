@@ -39,8 +39,8 @@ const config: Config = {
         danger: "#EF4444",
       },
       fontFamily: {
-        heading: ["'Plus Jakarta Sans'", "sans-serif"],
-        body: ["Inter", "-apple-system", "sans-serif"],
+        heading: ["var(--font-jakarta)", "sans-serif"],
+        body: ["var(--font-inter)", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
       },
       borderRadius: {
         xl: "1rem",
@@ -49,7 +49,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 };
 
 export default config;

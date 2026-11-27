@@ -703,3 +703,27 @@ Fixed failed like/vote operations leaving the UI in an incorrect state and stale
 - `npm run build` → PASSED (`Compiled successfully`).
 
 Remaining issues: none for this issue.
+
+## 26. Issue #27 — Tailwind Animation Plugin and CSS Font Variables
+
+### 26.1 Summary
+
+Resolved missing `tailwindcss-animate` dependency/configuration and undefined CSS font variables (`--font-inter`, `--font-jakarta`) that broke transitions and typography.
+
+### 26.2 Implementation
+
+- Installed `tailwindcss-animate@^1.0.7` (compatible with Tailwind 3.4) and updated `package-lock.json`.
+- Registered plugin in `tailwind.config.ts`: `plugins: [require("tailwindcss-animate")]`.
+- Defined `--font-inter` and `--font-jakarta` in `app/globals.css` `:root` to match fonts loaded in `app/layout.tsx`.
+- Centralized typography: `tailwind.config.ts` `fontFamily` now references `var(--font-jakarta)` / `var(--font-inter)`.
+- Added `prefers-reduced-motion` media query in `app/globals.css` to disable animations/transitions.
+
+### 26.3 Verification
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED; compiled CSS contains `animate-in`, `fade-in`, `slide-in-from-top-2`, `--font-inter`, `--font-jakarta`.
+- `node tests/e2e-ui-test.mjs` → 52/52 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+- `npm run lint` → NOT VERIFIED (interactive `next lint` setup prompt; no ESLint config).
+
+Remaining issues: none for this issue.
