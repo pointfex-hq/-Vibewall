@@ -18,6 +18,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || PLACEHOLDER
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    flowType: "pkce",
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
@@ -53,10 +54,11 @@ export async function signInWithGoogle(
     return { data: { user: null }, error: { message: "Authentication is not configured." } };
   }
 
+  sessionStorage.setItem("vibewall_auth_return", redirectTo || window.location.href);
   return await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: redirectTo || (typeof window !== "undefined" ? window.location.href : undefined),
+      redirectTo: new URL("/auth/callback", window.location.origin).href,
     },
   });
 }
