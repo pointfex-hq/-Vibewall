@@ -794,3 +794,26 @@ Fixed the Minimal Paper light theme where white text on light backgrounds produc
 - `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
 
 Remaining issues: none for this issue.
+
+## 30. Issue #9 — Swipe-to-Like on Wall Cards
+
+### 30.1 Summary
+
+Added a dependency-free horizontal swipe-to-like gesture to PhotoCard and NoteCard while preserving tap-to-like, with threshold-based recognition, vertical-scroll preservation, button-tap exclusion, optimistic rollback (issue #26), and reduced-motion support.
+
+### 30.2 Implementation
+
+- `lib/useSwipeToLike.ts` (new): touch gesture hook with 50px threshold, 15px vertical tolerance, interactive-element exclusion, reduced-motion-aware transform, single trigger per gesture.
+- `components/PhotoCard.tsx`, `components/NoteCard.tsx`: attached swipe handlers + transform feedback.
+
+### 30.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 30.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.

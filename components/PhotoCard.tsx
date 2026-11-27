@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { PostDTO } from "@/types/vibewall";
 import { Icon } from "@/components/icons";
+import { useSwipeToLike } from "@/lib/useSwipeToLike";
 
 interface PhotoCardProps {
   post: PostDTO;
@@ -38,6 +39,11 @@ export default function PhotoCard({
     onLikeToggle?.(post.id);
   };
 
+  const { handlers: swipeHandlers, offset: swipeOffset } = useSwipeToLike(handleLike, {
+    threshold: 50,
+    maxVertical: 15,
+  });
+
   const handleDoubleTap = () => {
     if (!isLiked) handleLike();
   };
@@ -64,7 +70,14 @@ export default function PhotoCard({
   };
 
   return (
-    <article className="relative w-full rounded-2xl bg-surface-container border border-outline overflow-hidden shadow-xl transition-all duration-300 hover:border-primary/40 group">
+    <article
+      className="relative w-full rounded-2xl bg-surface-container border border-outline overflow-hidden shadow-xl transition-all duration-300 hover:border-primary/40 group touch-pan-y"
+      style={swipeOffset ? { transform: `translateX(${swipeOffset}px)` } : undefined}
+      onTouchStart={swipeHandlers.onTouchStart}
+      onTouchMove={swipeHandlers.onTouchMove}
+      onTouchEnd={swipeHandlers.onTouchEnd}
+      onTouchCancel={swipeHandlers.onTouchCancel}
+    >
       {/* Author Header */}
       <div className="flex items-center justify-between p-3.5 pb-2.5">
         <div className="flex items-center gap-2.5 min-w-0">

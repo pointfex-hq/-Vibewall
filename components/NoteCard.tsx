@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { NoteDTO } from "@/types/vibewall";
 import { Icon } from "@/components/icons";
+import { useSwipeToLike } from "@/lib/useSwipeToLike";
 
 interface NoteCardProps {
   note: NoteDTO;
@@ -19,6 +20,7 @@ export default function NoteCard({
   onReport,
 }: NoteCardProps) {
   const [reported, setReported] = useState(false);
+  const [isLikeAnimating, setIsLikeAnimating] = useState(false);
 
   // Like state is derived from authoritative feed props; the parent wall
   // supplies optimistic overrides while a like request is in flight.
@@ -26,9 +28,16 @@ export default function NoteCard({
   const likeCount = optimisticLike ? optimisticLike.count : note.like_count;
 
   const handleLike = () => {
+    setIsLikeAnimating(true);
+    setTimeout(() => setIsLikeAnimating(false), 400);
     // Parent (wall) owns optimistic toggle + rollback via onLikeToggle.
     onLikeToggle?.(note.id);
   };
+
+  const { handlers: swipeHandlers, offset: swipeOffset } = useSwipeToLike(handleLike, {
+    threshold: 50,
+    maxVertical: 15,
+  });
 
   const handleReport = () => {
     if (confirm("Report this note to moderators?")) {
@@ -39,11 +48,16 @@ export default function NoteCard({
 
   return (
     <article
-      className={`relative w-full rounded-xl p-4 shadow-md transition-all duration-300 border ${
+      className={`relative w-full rounded-xl p-4 shadow-md transition-all duration-300 border touch-pan-y ${
         note.is_pinned
           ? "bg-gradient-to-br from-surface-container via-surface-container to-primary-container/15 border-primary/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]"
           : "bg-surface-container border-outline/40 hover:border-outline"
       }`}
+      style={swipeOffset ? { transform: `translateX(${swipeOffset}px)` } : undefined}
+      onTouchStart={swipeHandlers.onTouchStart}
+      onTouchMove={swipeHandlers.onTouchMove}
+      onTouchEnd={swipeHandlers.onTouchEnd}
+      onTouchCancel={swipeHandlers.onTouchCancel}
     >
       {/* Pinned Badge if applicable */}
       {note.is_pinned && (
