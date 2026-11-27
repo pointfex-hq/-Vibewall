@@ -3,6 +3,7 @@ import {
   PostDTO,
   NoteDTO,
   PollDTO,
+  StoryDTO,
   FeedResponse,
   ThemeKey,
 } from "@/types/vibewall";
@@ -13,6 +14,7 @@ export interface MockStore {
   posts: Map<string, PostDTO & { room_code: string; report_count: number }>;
   notes: Map<string, NoteDTO & { room_code: string; report_count: number }>;
   polls: Map<string, PollDTO & { room_code: string }>;
+  stories: Map<string, StoryDTO & { room_code: string }>;
 }
 
 // In-memory persistent singleton in Node / browser globalThis
@@ -41,6 +43,7 @@ function initSeedStore(): MockStore {
   const posts = new Map<string, PostDTO & { room_code: string; report_count: number }>();
   const notes = new Map<string, NoteDTO & { room_code: string; report_count: number }>();
   const polls = new Map<string, PollDTO & { room_code: string }>();
+  const stories = new Map<string, StoryDTO & { room_code: string }>();
 
   // Default seed room: VIBE26
   const roomVibe26: RoomDTO & { screen_token: string; owner_id: string } = {
@@ -169,7 +172,39 @@ function initSeedStore(): MockStore {
   };
   polls.set(seedPoll.id, seedPoll);
 
-  return { rooms, posts, notes, polls };
+  // Seed Story
+  const seedStory: StoryDTO & { room_code: string } = {
+    id: "story-fest-1",
+    prompt: "Show your wildest fest squad moment tonight! 🎸",
+    is_active: true,
+    entries: [
+      {
+        id: "entry-1",
+        image_url: "/assets/group_of_diverse_university_students_laughing_and_posing_together_with_neon.png",
+        author_name: "Murad FestCrew",
+        sequence_order: 1,
+        created_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
+      },
+      {
+        id: "entry-2",
+        image_url: "/assets/dynamic_university_music_festival_crowd_at_night_with_purple_and_violet_neon.png",
+        author_name: "Ayesha Noor",
+        sequence_order: 2,
+        created_at: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+      },
+      {
+        id: "entry-3",
+        image_url: "/assets/vibrant_university_night_music_festival_stage_with_glowing_violet_and_neon.png",
+        author_name: "Jitu Lead",
+        sequence_order: 3,
+        created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      },
+    ],
+    room_code: "VIBE26",
+  };
+  stories.set(seedStory.id, seedStory);
+
+  return { rooms, posts, notes, polls, stories };
 }
 
 export function getMockStore(): MockStore {
@@ -218,6 +253,7 @@ export const mockDB = {
       store.posts.clear();
       store.notes.clear();
       store.polls.clear();
+      store.stories.clear();
     } else {
       globalScope[globalKey] = initSeedStore();
     }
@@ -319,7 +355,15 @@ export const mockDB = {
       }
     }
 
-    return { posts, pinned_notes, notes, active_poll };
+    let active_story: StoryDTO | null = null;
+    for (const s of store.stories.values()) {
+      if (s.room_code === cleanCode && s.is_active) {
+        active_story = s;
+        break;
+      }
+    }
+
+    return { posts, pinned_notes, notes, active_poll, active_story };
   },
 
   createPost(code: string, data: { image_url: string; frame_id?: string; author_name?: string; author_avatar?: string }) {
@@ -422,6 +466,37 @@ export const mockDB = {
     store.polls.set(pollId, poll);
     if (room) broadcastLocalEvent(room.id, "poll_updated", { poll });
     return poll;
+  },
+
+  createStory(code: string, prompt: string) {
+    const store = getMockStore();
+    const cleanCode = code.toUpperCase();
+    const storyId = "story-" + Date.now();
+    const story: StoryDTO & { room_code: string } = {
+      id: storyId,
+      prompt: prompt.trim(),
+      is_active: true,
+      entries: [],
+      room_code: cleanCode,
+    };
+    store.stories.set(storyId, story);
+    return story;
+  },
+
+  addStoryEntry(storyId: string, imageUrl: string, authorName?: string) {
+    const store = getMockStore();
+    const story = store.stories.get(storyId);
+    if (!story || !story.is_active) return null;
+
+    const entry = {
+      id: "entry-" + Date.now(),
+      image_url: imageUrl,
+      author_name: authorName || resolveMockAuthor().author_name,
+      sequence_order: story.entries.length + 1,
+      created_at: new Date().toISOString(),
+    };
+    story.entries.push(entry);
+    return entry;
   },
 
   reportItem(targetType: "post" | "note" | "story_entry", targetId: string) {

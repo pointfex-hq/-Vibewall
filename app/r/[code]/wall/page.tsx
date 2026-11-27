@@ -10,6 +10,7 @@ import {
   NoteDTO,
   PollDTO,
   RoomDTO,
+  StoryDTO,
 } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { subscribeToRoom, getAuthState } from "@/lib/supabase";
@@ -20,6 +21,7 @@ import ErrorState from "@/components/ErrorState";
 import PhotoCard from "@/components/PhotoCard";
 import NoteCard from "@/components/NoteCard";
 import PollCard from "@/components/PollCard";
+import StoryStrip from "@/components/StoryStrip";
 import ComposerModal, { ComposerMode } from "@/components/ComposerModal";
 import VibeCardModal from "@/components/VibeCardModal";
 import { Icon } from "@/components/icons";
@@ -34,6 +36,7 @@ export default function LiveSocialWallPage() {
     pinned_notes: [],
     notes: [],
     active_poll: null,
+    active_story: null,
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -102,13 +105,15 @@ export default function LiveSocialWallPage() {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [composerDefaultTab, setComposerDefaultTab] = useState<"photo" | "note">("photo");
   const [composerMode, setComposerMode] = useState<ComposerMode>("standard");
+  const [storyEntryId, setStoryEntryId] = useState<string | null>(null);
   const [photoCooldownRemaining, setPhotoCooldownRemaining] = useState(0);
   const [noteCooldownRemaining, setNoteCooldownRemaining] = useState(0);
 
-  // Reset composer session state when closing.
+  // Reset composer session state (mode + story target) when closing.
   const resetComposer = () => {
     setIsComposerOpen(false);
     setComposerMode("standard");
+    setStoryEntryId(null);
   };
 
   // VibeCard Modal state
@@ -396,9 +401,33 @@ export default function LiveSocialWallPage() {
     file: File;
     mode: ComposerMode;
     frameId?: string;
+    storyId?: string;
   }): Promise<boolean> => {
     return guardAction(async () => {
-      // Standard feed photo upload.
+      if (data.mode === "story-entry") {
+        // Chain Story entry — never calls api.createPost().
+        const storyId = data.storyId ?? storyEntryId;
+        if (!storyId) {
+          // The Chain Story is unavailable — do not send an invalid request.
+          throw new Error("The Chain Story is no longer available. Try again from the wall.");
+        }
+        const uploadRes = await api.uploadPhoto(data.file);
+        const res = await api.addStoryEntry(storyId, {
+          image_url: uploadRes.image_url,
+          cloudinary_public_id: uploadRes.cloudinary_public_id,
+          author_name: authorName,
+        });
+        // Update the active story with the new entry (existing state conventions).
+        setFeed((prev) => {
+          const story = prev.active_story;
+          if (!story || story.id !== storyId) return prev;
+          const entries = [...story.entries, res.entry];
+          return { ...prev, active_story: { ...story, entries } };
+        });
+        return true;
+      }
+
+      // Standard feed photo upload (unchanged behavior).
       const uploadRes = await api.uploadPhoto(data.file);
       const postRes = await api.createPost(roomCode, {
         image_url: uploadRes.image_url,
@@ -573,7 +602,22 @@ export default function LiveSocialWallPage() {
             <PollCard key={feed.active_poll.id} poll={feed.active_poll} onVote={handlePollVote} />
           )}
 
-
+          {/* 3. Chain Story Strip (if active) */}
+          {feed.active_story && (
+            <StoryStrip
+              story={feed.active_story}
+              roomCode={roomCode}
+              onAddEntry={() => {
+                void guardAction(() => {
+                  if (!feed.active_story) return;
+                  setComposerMode("story-entry");
+                  setStoryEntryId(feed.active_story.id);
+                  setComposerDefaultTab("photo");
+                  setIsComposerOpen(true);
+                });
+              }}
+            />
+          )}
 
           {/* Feed Filter Tabs */}
           <div className="flex items-center gap-2 border-b border-outline/30 pb-2">
@@ -667,6 +711,7 @@ export default function LiveSocialWallPage() {
               onClick={() => {
                 void guardAction(() => {
                   setComposerMode("standard");
+                  setStoryEntryId(null);
                   setComposerDefaultTab("photo");
                   setIsComposerOpen(true);
                 });
@@ -682,6 +727,7 @@ export default function LiveSocialWallPage() {
               onClick={() => {
                 void guardAction(() => {
                   setComposerMode("standard");
+                  setStoryEntryId(null);
                   setComposerDefaultTab("note");
                   setIsComposerOpen(true);
                 });
@@ -700,6 +746,7 @@ export default function LiveSocialWallPage() {
           isOpen={isComposerOpen}
           onClose={resetComposer}
           mode={composerMode}
+          storyId={storyEntryId || undefined}
           defaultTab={composerDefaultTab}
           onSubmitPhoto={handleSubmitPhoto}
           onSubmitNote={handleSubmitNote}
