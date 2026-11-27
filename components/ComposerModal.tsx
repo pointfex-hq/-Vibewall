@@ -6,7 +6,7 @@ import { validateAndCompressImage, CompressionResult } from "@/lib/upload/compre
 import { useAuth } from "@/lib/auth";
 import { Icon } from "@/components/icons";
 
-export type ComposerMode = "standard" | "story-entry";
+export type ComposerMode = "standard";
 
 interface ComposerModalProps {
   isOpen: boolean;
@@ -16,12 +16,9 @@ interface ComposerModalProps {
     file: File;
     mode: ComposerMode;
     frameId?: string;
-    storyId?: string;
   }) => Promise<boolean | void>;
   onSubmitNote: (data: { body: string }) => Promise<boolean | void>;
-  /** `story-entry` mode hides frame selection and submits via `api.addStoryEntry`. */
   mode?: ComposerMode;
-  storyId?: string;
   defaultTab?: "photo" | "note";
   photoCooldownRemaining?: number;
   noteCooldownRemaining?: number;
@@ -33,7 +30,6 @@ export default function ComposerModal({
   onSubmitPhoto,
   onSubmitNote,
   mode = "standard",
-  storyId,
   defaultTab = "photo",
   photoCooldownRemaining = 0,
   noteCooldownRemaining = 0,
@@ -148,16 +144,10 @@ export default function ComposerModal({
     setErrorMessage(null);
     setIsUploadingPhoto(true);
     try {
-      if (mode === "story-entry" && !storyId) {
-        // The Chain Story is unavailable — do not send an invalid request.
-        setErrorMessage("The Chain Story is no longer available. Try again from the wall.");
-        return;
-      }
       const ok = await onSubmitPhoto({
         file: selectedFile,
         mode,
         frameId: selectedFrame,
-        storyId,
       });
       if (ok === false) {
         // Blocked by the auth guard — keep the composer open for retry.
@@ -357,8 +347,7 @@ export default function ComposerModal({
                     </div>
                   </div>
 
-                  {/* Frame Selector — hidden in story-entry mode */}
-                  {mode !== "story-entry" && (
+                  {/* Frame Selector */}
                     <div className="flex flex-col gap-1.5">
                       <label className="font-heading font-semibold text-xs text-on-surface-variant">
                         Choose Frame Style
@@ -380,7 +369,6 @@ export default function ComposerModal({
                         ))}
                       </div>
                     </div>
-                  )}
                 </div>
               )}
 
@@ -393,12 +381,7 @@ export default function ComposerModal({
                 {isUploadingPhoto ? (
                   <>
                     <Icon name="progress_activity" size={18} className="animate-spin" />
-                    <span>{mode === "story-entry" ? "Adding entry..." : "Posting to live wall..."}</span>
-                  </>
-                ) : mode === "story-entry" ? (
-                  <>
-                    <Icon name="add_a_photo" size={18} />
-                    <span>Add to Chain Story</span>
+                    <span>Posting to live wall...</span>
                   </>
                 ) : photoCooldownRemaining > 0 ? (
                   <span>Cooldown: wait {photoCooldownRemaining}s</span>

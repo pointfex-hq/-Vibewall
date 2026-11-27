@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "VibeWall — Live Social Wall for Events & Festivals",
   description:
-    "No-login QR-based live social wall with photo feed, vibe notes, live polls, chain stories, and synchronized venue screen display.",
+    "No-login QR-based live social wall with photo feed, vibe notes, live polls, and synchronized venue screen display.",
 };
 
 export const viewport: Viewport = {

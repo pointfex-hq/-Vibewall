@@ -97,12 +97,3 @@
 .neon-glow-emerald {
   box-shadow: 0 0 24px rgba(16, 185, 129, 0.35);
 }
-
-@keyframes storyTimer {
-  0% {
-    width: 0%;
-  }
-  100% {
-    width: 100%;
-  }
-}

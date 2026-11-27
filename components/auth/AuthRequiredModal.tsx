@@ -142,8 +142,7 @@ export default function AuthRequiredModal({
           className="font-body text-sm text-on-surface-variant leading-relaxed"
         >
           You&#39;re currently viewing this room as a guest. Sign in with Google
-          to share photos, post notes, like memories, vote in polls, and join
-          Chain Stories.
+          to share photos, post notes, like memories, and vote in polls.
         </p>
 
         {/* Primary: Google sign-in */}

@@ -125,7 +125,6 @@ try {
         posts: new Map(),
         notes: new Map(),
         polls: new Map(),
-        stories: new Map(),
       };
     });
     await page.goto(`${BASE_URL}/`, { waitUntil: "domcontentloaded" });
