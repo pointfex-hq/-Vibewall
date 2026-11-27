@@ -17,3 +17,12 @@ Send the documented JSON body to `POST /api/cloudinary/sign`. The JSON response 
 ## Verification
 
 Run `npm run build`. For the integration test, set `VIBEWALL_TEST_DATABASE_URL` to a fresh, empty, disposable PostgreSQL database and run `npm test`. The suite creates its own Auth and Realtime substitutes and mocks Cloudinary network responses. Use a fresh database on each run. Real Google sign-in, cross-device Realtime delivery and the live Cloudinary upload/delete handshake require a configured development project.
+---
+
+## 🎨 UI/UX Design — Figma
+
+Explore the VibeWall UI/UX design and visual experience.
+
+**Live Figma Design:** [Open VibeWall Design](https://www.figma.com/design/F2WT9hLyMtmyM8a57gQl9G/Untitled?node-id=0-1&t=ivvYj26l7tq6ZMd2-1)
+
+The Figma file contains the visual design reference for the VibeWall project, including its user interface, event experience, and Live Social Wall concept.
