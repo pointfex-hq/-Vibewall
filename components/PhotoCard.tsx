@@ -22,7 +22,7 @@ export default function PhotoCard({
   onLikeToggle,
   onReport,
   onExportCard,
-  themeAccent = "#8B5CF6",
+  themeAccent = "#A61C3C",
 }: PhotoCardProps) {
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
   const [reported, setReported] = useState(false);
@@ -59,19 +59,19 @@ export default function PhotoCard({
   const getFrameClasses = (frameId: string) => {
     switch (frameId) {
       case "neon":
-        return "p-2 rounded-2xl bg-gradient-to-tr from-purple-600/40 via-violet-500/20 to-fuchsia-500/40 border border-purple-500/50 shadow-[0_0_20px_rgba(139,92,246,0.3)]";
+        return "p-2 rounded-2xl bg-gradient-to-tr from-[#E39AAB]/50 via-[#F3C6CF]/30 to-[#C0872B]/40 border border-[#D97C5C]/50";
       case "fest26":
-        return "p-2 rounded-2xl bg-gradient-to-r from-pink-500/40 via-purple-600/30 to-indigo-500/40 border border-pink-500/60 shadow-[0_0_20px_rgba(236,72,153,0.35)]";
+        return "p-2 rounded-2xl bg-gradient-to-r from-[#A61C3C]/30 via-[#D97C5C]/20 to-[#C0872B]/30 border border-[#A61C3C]/40";
       case "sunset":
-        return "p-2 rounded-2xl bg-gradient-to-br from-amber-500/30 via-orange-500/20 to-rose-500/30 border border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.25)]";
+        return "p-2 rounded-2xl bg-gradient-to-br from-[#F0B35C]/40 via-[#D97C5C]/20 to-[#A61C3C]/25 border border-[#C0872B]/50";
       default:
-        return "p-1 rounded-2xl border border-white/10";
+        return "p-1 rounded-2xl border border-[#ECD9D2]";
     }
   };
 
   return (
     <article
-      className="relative w-full rounded-2xl bg-surface-container border border-outline overflow-hidden shadow-xl transition-all duration-300 hover:border-primary/40 group touch-pan-y"
+      className="figma-card relative w-full overflow-hidden rounded-3xl transition-all duration-300 hover:border-primary/50 group touch-pan-y"
       style={swipeOffset ? { transform: `translateX(${swipeOffset}px)` } : undefined}
       onTouchStart={swipeHandlers.onTouchStart}
       onTouchMove={swipeHandlers.onTouchMove}
@@ -126,8 +126,13 @@ export default function PhotoCard({
 
       {/* Photo Frame Container */}
       <div className="px-3 pb-2" onDoubleClick={handleDoubleTap}>
+        <span className="figma-tape" style={{ background: "rgba(192, 135, 43, 0.5)" }} />
         <div className={`relative overflow-hidden ${getFrameClasses(post.frame_id)}`}>
-          <div className="relative w-full aspect-[4/5] rounded-xl overflow-hidden bg-surface-container-lowest">
+          <span className="figma-pill absolute right-2 top-2 z-10 bg-[#4A3B38] text-white">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#E7C27A]" />
+            #FestMoment
+          </span>
+          <div className="relative w-full aspect-[4/5] rounded-xl overflow-hidden bg-[#FFF0E4]">
             <Image
               src={post.image_url}
               alt={`Photo by ${post.author_name}`}
@@ -147,7 +152,7 @@ export default function PhotoCard({
       </div>
 
       {/* Card Footer: Reaction Bar */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-t border-outline/30 bg-surface-container-low/40">
+      <div className="flex items-center justify-between border-t border-outline/40 bg-card-low/50 px-3.5 py-2.5">
         <button
           onClick={handleLike}
           className="flex items-center gap-1.5 py-1 px-2 rounded-full hover:bg-surface-container-high transition-colors active:scale-95"

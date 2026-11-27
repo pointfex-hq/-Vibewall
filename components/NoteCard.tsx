@@ -48,10 +48,10 @@ export default function NoteCard({
 
   return (
     <article
-      className={`relative w-full rounded-xl p-4 shadow-md transition-all duration-300 border touch-pan-y ${
+      className={`relative w-full rounded-2xl border p-4 shadow-figma transition-all duration-300 touch-pan-y ${
         note.is_pinned
-          ? "bg-gradient-to-br from-surface-container via-surface-container to-primary-container/15 border-primary/50 shadow-[0_0_15px_rgba(139,92,246,0.15)]"
-          : "bg-surface-container border-outline/40 hover:border-outline"
+          ? "border-primary/40 bg-[#FBEAE8]"
+          : "border-[#E8C87A] bg-[#F3CE73]"
       }`}
       style={swipeOffset ? { transform: `translateX(${swipeOffset}px)` } : undefined}
       onTouchStart={swipeHandlers.onTouchStart}
@@ -70,14 +70,14 @@ export default function NoteCard({
       )}
 
       {/* Note Body */}
-      <p className="font-body text-sm md:text-base text-on-surface leading-relaxed whitespace-pre-wrap break-words">
+      <p className="font-body text-sm md:text-base font-semibold leading-relaxed text-[#4A3320] whitespace-pre-wrap break-words">
         {note.body}
       </p>
 
       {/* Note Meta & Controls */}
-      <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-outline/20">
-        <div className="flex items-center gap-2 text-xs text-on-surface-variant font-medium">
-          <span className="font-semibold text-on-surface">{note.author_name}</span>
+      <div className="mt-3 flex items-center justify-between border-t border-[#C0872B]/30 pt-2.5">
+        <div className="flex items-center gap-2 text-xs font-medium text-[#6E5230]">
+          <span className="font-bold text-[#4A3320]">{note.author_name}</span>
           <span>•</span>
           <span>{formatTimeAgo(note.created_at)}</span>
         </div>

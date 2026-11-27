@@ -936,3 +936,54 @@ Resolved all conflicts from merging backend-core work (`origin/main`) into the f
 - `npm test` → PASSED (backend DB test skipped without a disposable database).
 
 Remaining issues: none.
+
+## 36. Figma UI Implementation — `feat/figma-ui-implementation`
+
+### 36.1 Reference and scope
+
+Implemented the Figma design "Untitled" (`F2WT9hLyMtmyM8a57gQl9G`, node 0-1) on a dedicated branch created from the latest `origin/feat/frontend-ui`. Design was inspected through Figma's public embed (captured frames for Landing Host Portal, Entry & Guest Access, mobile wall feed, Create Account, Welcome Back and Host Moderation dashboard). No replacement design was invented.
+
+### 36.2 Design system / tokens
+
+- `lib/themes.ts`: six Figma heritage themes on the existing keys so all rooms inherit the design — `midnight-neon` is now **Midnight Katha** (ivory paper, burgundy `#A61C3C`, marigold `#C0872B`, terracotta `#D97C5C`), plus Minimal Paper, Campus Sunset, Emerald Fest, and two new keys `shanta-after-dark` / `rustic-carnival` (`types/vibewall.ts` extended).
+- `tailwind.config.ts`: Figma accent colours (`tertiary` marigold, `secondary` terracotta, `danger` burgundy) and `shadow-figma` / `shadow-polaroid`.
+- `app/globals.css`: `:root` switched to the Figma paper palette; new `.figma-paper`, `.figma-card`, `.figma-polaroid`, `.figma-tape`, `.figma-primary-btn`, `.figma-amber-btn`, `.figma-pill`, `.figma-kicker` utilities; reduced-motion support retained.
+
+### 36.3 Screens and components
+
+- Landing (`app/page.tsx`): illustrated brand tile, hero "Turn Every Event Into A Living Memory Wall", Create an Event / Explore Live Walls CTAs, real quick-join, tilted memory-quilt polaroids using local assets, real active-room cards, interactive six-theme selector, and How It Works steps.
+- Entry gate (`app/r/[code]/page.tsx`): paper-card event banner, status pill, guest notice and Google/preview CTAs restyled to the Figma palette and radii.
+- Wall (`app/r/[code]/wall/page.tsx`): paper hero, warm quota/poll/story cards, `#chain-story` and `#poll` anchors, Figma mobile bottom navigation (`components/figma/index.tsx`) with real links; floating composer lifted above the nav.
+- Cards: `components/PhotoCard.tsx` now renders polaroid framing, tape and hashtag pill; `components/NoteCard.tsx` renders Figma mustard note cards (pinned = rose paper).
+- Host dashboard (`app/host/[code]/page.tsx`): circular-stat telemetry cards, pill tabs, Figma moderation queue cards with hashtag/time pills and paper note cards.
+- Venue display: stage background moved to Figma "Shanta After Dark" burgundy.
+- New auth screens (`app/signin/page.tsx`, `app/signup/page.tsx`, `components/figma/AuthScreen.tsx`) reproduce the Figma Welcome Back / Create Account frames. Google sign-in uses the real auth service; email/password creates a local session only in explicit mock mode and reports a clear limitation otherwise (no fabricated identity in real mode).
+
+### 36.4 Reusable components
+
+`components/figma/index.tsx` — `BrandMark`, `SectionHeading`, `MemoryPolaroid`, `StatCard`, `StepCard`, `AvatarBubble`, `HashtagPill`, `FigmaBottomNav`; `components/figma/AuthScreen.tsx`. `components/icons.tsx` gained `grid_view`, `person`, `auto_awesome`, `calendar_event` mappings.
+
+### 36.5 Functional integration preserved
+
+No route, API contract, auth flow, upload/compression path, realtime subscription or moderation action was removed. All test-visible labels and roles were preserved (including `Live Social Wall`, `Create New Room`, `Create the First Room`, entry CTAs, quota/poll/story assertions, VibeCard export, and host tab labels).
+
+### 36.6 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors)
+- `npm run build` → PASSED
+- `node tests/e2e-ui-test.mjs` → 54/54 PASS
+- `BASE_URL=http://localhost:3000 node tests/regression-navigation-errors.mjs` → 18/18 PASS
+- `node verify-mock-api-errors.mjs` → 23/23 PASS
+- Responsive sweep at 320/390/430/768/1024/1280 px across all seven routes → zero horizontal overflow
+- Mock sign-up → local session → landing redirect and sign-in auto-redirect verified in browser.
+
+Screenshots: `figma-implementation/*.png`.
+
+### 36.7 Known differences from Figma
+
+- The reference's simulated QR-camera and "Kantha avatar" picker are represented by the existing real room-code entry and Google identity flow; no fake camera/album interaction was added.
+- Auth screens' email/password path is local-mock only; real Supabase deployment still uses Google sign-in until an email provider is configured by the backend owner.
+- Theme card names use a CSS-generated label in the landing showcase so they do not duplicate the modal's accessible theme buttons.
+- No new runtime dependencies were added.
+
+Remaining issues: none for this implementation.

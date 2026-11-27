@@ -182,7 +182,7 @@ export default function VenueDisplayPage() {
 
   if (loadError) {
     return (
-      <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center p-6">
+      <div className="fixed inset-0 bg-[#2A1118] text-[#FFF8F5] flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md">
           <ErrorState
             status={loadError.status}
@@ -203,7 +203,7 @@ export default function VenueDisplayPage() {
 
   if (isLoading || !screenData) {
     return (
-      <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center gap-3">
+      <div className="fixed inset-0 bg-[#2A1118] text-[#FFF8F5] flex flex-col items-center justify-center gap-3">
         <Icon name="progress_activity" size={48} className="animate-spin text-primary" />
         <span className="font-heading font-extrabold text-xl tracking-wider">
           Connecting Venue Display...
@@ -223,7 +223,7 @@ export default function VenueDisplayPage() {
         <header className="flex items-center justify-between pb-4 border-b border-outline/30 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary via-purple-600 to-secondary flex items-center justify-center shadow-[0_0_24px_rgba(139,92,246,0.5)]">
-              <Icon name="sensors" size={28} className="text-white" />
+              <Icon name="sensors" size={28} className="text-[#FFF8F5]" />
             </div>
             <div className="flex flex-col">
               <span className="font-heading font-extrabold text-2xl text-on-surface tracking-tight">

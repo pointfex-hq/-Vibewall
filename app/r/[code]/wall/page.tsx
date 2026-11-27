@@ -26,6 +26,7 @@ import StoryStrip from "@/components/StoryStrip";
 import ComposerModal, { ComposerMode } from "@/components/ComposerModal";
 import VibeCardModal from "@/components/VibeCardModal";
 import { Icon } from "@/components/icons";
+import { BrandMark, FigmaBottomNav } from "@/components/figma";
 import { fireUploadConfetti } from "@/lib/confetti";
 
 export default function LiveSocialWallPage() {
@@ -488,11 +489,11 @@ export default function LiveSocialWallPage() {
     return (
       <ThemeWrapper themeKey="midnight-neon">
         <div className="min-h-screen bg-surface text-on-surface">
-          <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
-            <div className="max-w-2xl mx-auto h-16 px-4 flex items-center justify-between">
+          <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+            <div className="mx-auto flex h-16 max-w-2xl items-center justify-between gap-2 px-4">
               <Link
                 href="/"
-                className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
+                className="flex min-w-0 items-center gap-2 text-on-surface transition-colors hover:text-primary"
               >
                 <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
                   <Icon name="sensors" size={18} />
@@ -520,31 +521,29 @@ export default function LiveSocialWallPage() {
 
   return (
     <ThemeWrapper themeKey={room?.theme || "midnight-neon"}>
-      <div className="flex flex-col min-h-screen bg-surface text-on-surface pb-28">
+      <div className="figma-paper flex min-h-screen flex-col pb-40 text-on-surface md:pb-28">
         {/* Sticky Header */}
-        <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
-          <div className="max-w-2xl mx-auto h-16 px-4 flex items-center justify-between">
+        <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-2xl items-center justify-between gap-2 px-4">
             <Link
               href="/"
-              className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
+              className="flex min-w-0 items-center gap-2 text-on-surface transition-colors hover:text-primary"
             >
-              <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                <Icon name="sensors" size={18} />
-              </div>
+              <BrandMark size={34} />
               <div className="flex flex-col">
                 <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
                   VibeWall
                 </span>
-                <span className="font-heading font-bold text-xs text-on-surface truncate max-w-[140px] sm:max-w-[200px]">
+                <span className="max-w-[100px] truncate font-heading text-xs font-bold text-on-surface sm:max-w-[200px]">
                   {room?.title || "Live Wall"}
                 </span>
               </div>
             </Link>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 onClick={handleCopyCode}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline/50 hover:bg-primary-container/20 hover:text-primary text-xs font-bold text-on-surface transition-all active:scale-95"
+                className="figma-pill border border-outline/60 px-3 py-1.5 text-xs transition-all hover:text-primary active:scale-95"
                 title="Copy Room Invitation Code"
               >
                 <span>#{roomCode}</span>
@@ -582,7 +581,7 @@ export default function LiveSocialWallPage() {
           )}
 
           {/* 1. Event Hero Banner */}
-          <section className="relative w-full rounded-2xl overflow-hidden bg-surface-container border border-outline shadow-xl">
+          <section className="figma-card relative w-full overflow-hidden rounded-3xl">
             <div className="relative h-40 sm:h-48 w-full">
               <Image
                 src="/assets/vibrant_university_night_music_festival_stage_with_glowing_violet_and_neon.png"
@@ -591,7 +590,7 @@ export default function LiveSocialWallPage() {
                 className="object-cover"
                 priority
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-surface-container via-surface-container/60 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#3B2929] via-[#3B2929]/60 to-transparent" />
 
               <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md">
                 <span className="relative flex h-2 w-2">
@@ -630,11 +629,14 @@ export default function LiveSocialWallPage() {
 
           {/* 2. Interactive Poll (if active) — keyed by poll id so a new poll resets selection state */}
           {feed.active_poll && (
-            <PollCard key={feed.active_poll.id} poll={feed.active_poll} onVote={handlePollVote} />
+            <div id="poll" className="scroll-mt-24">
+              <PollCard key={feed.active_poll.id} poll={feed.active_poll} onVote={handlePollVote} />
+            </div>
           )}
 
           {/* 3. Chain Story Strip (if active) */}
           {feed.active_story && (
+            <div id="chain-story" className="scroll-mt-24">
             <StoryStrip
               story={feed.active_story}
               roomCode={roomCode}
@@ -648,6 +650,7 @@ export default function LiveSocialWallPage() {
                 });
               }}
             />
+            </div>
           )}
 
           {/* Feed Filter Tabs */}
@@ -736,7 +739,7 @@ export default function LiveSocialWallPage() {
         </main>
 
         {/* Floating Action Bar / Composer Trigger */}
-        <div className="fixed bottom-0 inset-x-0 z-40 pb-safe pt-2 bg-gradient-to-t from-surface via-surface/95 to-transparent pointer-events-none">
+        <div className="pointer-events-none fixed bottom-14 inset-x-0 z-40 bg-gradient-to-t from-surface via-surface/95 to-transparent pt-2 pb-safe md:bottom-0">
           <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-center gap-3 pointer-events-auto">
             <button
               onClick={() => {
@@ -748,7 +751,7 @@ export default function LiveSocialWallPage() {
                 });
               }}
               disabled={!auth.isReady}
-              className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-primary to-purple-600 text-on-primary font-heading font-bold text-xs sm:text-sm shadow-[0_0_24px_rgba(139,92,246,0.5)] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+              className="figma-primary-btn flex-1 px-4 py-3 text-xs sm:text-sm"
             >
               <Icon name="photo_camera" size={20} />
               <span>Post Photo</span>
@@ -764,13 +767,16 @@ export default function LiveSocialWallPage() {
                 });
               }}
               disabled={!auth.isReady}
-              className="flex-1 py-3 px-4 rounded-2xl bg-surface-container border border-outline text-on-surface hover:text-primary hover:border-primary font-heading font-bold text-xs sm:text-sm shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
+              className="figma-amber-btn flex-1 px-4 py-3 text-xs sm:text-sm"
             >
               <Icon name="edit_note" size={20} />
               <span>Write Note</span>
             </button>
           </div>
         </div>
+
+        {/* Figma mobile bottom navigation */}
+        <FigmaBottomNav code={roomCode} active="feed" />
 
         {/* Floating Composer Modal */}
         <ComposerModal

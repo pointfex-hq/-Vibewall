@@ -2,7 +2,9 @@ export type ThemeKey =
   | "midnight-neon"
   | "minimal-paper"
   | "campus-sunset"
-  | "emerald-fest";
+  | "emerald-fest"
+  | "shanta-after-dark"
+  | "rustic-carnival";
 
 export interface RoomDTO {
   id: string;

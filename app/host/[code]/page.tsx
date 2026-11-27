@@ -20,6 +20,7 @@ import { subscribeToRoom } from "@/lib/supabase";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import { Icon } from "@/components/icons";
+import { BrandMark, StatCard } from "@/components/figma";
 import ErrorState from "@/components/ErrorState";
 import { firePollConfetti } from "@/lib/confetti";
 
@@ -345,15 +346,13 @@ export default function HostDashboardPage() {
     return (
       <ThemeWrapper themeKey="midnight-neon">
         <div className="min-h-screen bg-surface text-on-surface">
-          <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
-            <div className="max-w-7xl mx-auto h-16 px-4 flex items-center justify-between">
+          <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+            <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 overflow-hidden px-4">
               <Link
                 href="/"
                 className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
               >
-                <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                  <Icon name="admin_panel_settings" size={18} />
-                </div>
+                <BrandMark size={34} />
                 <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
                   Host Admin Dashboard
                 </span>
@@ -377,11 +376,11 @@ export default function HostDashboardPage() {
 
   return (
     <ThemeWrapper themeKey={room?.theme || "midnight-neon"}>
-      <div className="flex flex-col min-h-screen bg-surface text-on-surface">
+      <div className="figma-paper flex min-h-screen flex-col text-on-surface">
         {/* Top Header */}
-        <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
-          <div className="max-w-7xl mx-auto h-16 px-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 overflow-hidden px-4">
+            <div className="flex min-w-0 items-center gap-3">
               <Link
                 href={`/r/${roomCode}/wall`}
                 className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors"
@@ -389,15 +388,13 @@ export default function HostDashboardPage() {
               >
                 <Icon name="arrow_back" size={20} />
               </Link>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                  <Icon name="admin_panel_settings" size={18} />
-                </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <BrandMark size={34} />
                 <div className="flex flex-col">
                   <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
                     Host Admin Dashboard
                   </span>
-                  <span className="font-heading font-bold text-sm text-on-surface truncate max-w-[200px]">
+                  <span className="max-w-[110px] truncate font-heading text-sm font-bold text-on-surface sm:max-w-[200px]">
                     {room?.title || "VibeWall Event"} (#{roomCode})
                   </span>
                 </div>
@@ -408,7 +405,7 @@ export default function HostDashboardPage() {
               {screenUrl ? <Link
                 href={screenUrl}
                 target="_blank"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
+                className="figma-primary-btn hidden px-3.5 py-2 text-xs sm:flex"
               >
                 <Icon name="tv" size={16} />
                 <span>Open Venue Display</span>
@@ -416,7 +413,7 @@ export default function HostDashboardPage() {
 
               <button
                 onClick={() => copyToClipboard(window.location.origin + `/r/${roomCode}`, "Guest Invite URL")}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline text-xs font-semibold hover:bg-surface-container-highest"
+                className="figma-card flex items-center gap-1 px-3 py-2 text-xs font-bold hover:border-primary/50"
               >
                 <Icon name="share" size={15} />
                 <span className="hidden sm:inline">Invite Guests</span>
@@ -435,67 +432,18 @@ export default function HostDashboardPage() {
 
         <main className="max-w-7xl mx-auto w-full px-4 py-6 flex flex-col gap-6">
           {/* Metrics Telemetry Strip */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
-                <span>Room Status</span>
-                <Icon name="sensors" size={18} className="text-primary" />
-              </div>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface capitalize">
-                  {room?.status || "Open"}
-                </span>
-                <span className="text-xs font-bold text-tertiary">Live</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <StatCard label="Room Status" value={room?.status || "Open"} hint="Live" icon="sensors" />
 
-            <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
-                <span>Live Feed Items</span>
-                <Icon name="photo_library" size={18} className="text-tertiary" />
-              </div>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface">
-                  {feed.posts.length + feed.notes.length}
-                </span>
-                <span className="text-xs text-on-surface-variant">
-                  {feed.posts.length} photos
-                </span>
-              </div>
-            </div>
+            <StatCard label="Live Feed Items" value={feed.posts.length + feed.notes.length} hint={`${feed.posts.length} photos`} icon="photo_library" />
 
-            <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
-                <span>Active Poll Votes</span>
-                <Icon name="how_to_vote" size={18} className="text-primary" />
-              </div>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="font-heading font-extrabold text-xl sm:text-2xl text-on-surface">
-                  {feed.active_poll?.total_votes || 0}
-                </span>
-                <span className="text-xs text-primary font-bold">Realtime</span>
-              </div>
-            </div>
+            <StatCard label="Active Poll Votes" value={feed.active_poll?.total_votes || 0} hint="Realtime" icon="how_to_vote" />
 
-            <div className="p-4 rounded-2xl bg-surface-container border border-outline/50 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-on-surface-variant text-xs font-medium">
-                <span>Active Theme</span>
-                <Icon name="palette" size={18} className="text-secondary" />
-              </div>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="font-heading font-extrabold text-base sm:text-lg text-on-surface truncate">
-                  {THEMES[room?.theme || "midnight-neon"].name}
-                </span>
-                <span
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: THEMES[room?.theme || "midnight-neon"].accent }}
-                />
-              </div>
-            </div>
+            <StatCard label="Active Theme" value={THEMES[room?.theme || "midnight-neon"].name} icon="palette" />
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 border-b border-outline/30 pb-1 overflow-x-auto">
+          <div className="flex items-center gap-2 overflow-x-auto border-b border-outline/40 pb-2">
             {[
               { id: "moderation", label: "Content Moderation", icon: "shield" },
               { id: "themes", label: "Theme & Frames", icon: "palette" },
@@ -505,10 +453,10 @@ export default function HostDashboardPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-2 px-4 rounded-xl font-heading font-bold text-xs flex items-center gap-1.5 whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition-all ${
                   activeTab === tab.id
-                    ? "bg-primary text-on-primary shadow-sm"
-                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
+                    ? "figma-primary-btn"
+                    : "figma-card text-on-surface-variant hover:text-on-surface hover:border-primary/50"
                 }`}
               >
                 <Icon name={tab.icon} size={16} />
@@ -524,10 +472,10 @@ export default function HostDashboardPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setModFilter("active")}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${
                       modFilter === "active"
-                        ? "bg-primary-container text-on-primary-container"
-                        : "text-on-surface-variant hover:text-on-surface"
+                        ? "figma-primary-btn"
+                        : "figma-card text-on-surface-variant hover:text-on-surface"
                     }`}
                   >
                     Active Feed Items
@@ -555,17 +503,21 @@ export default function HostDashboardPage() {
                   .map((post) => (
                     <div
                       key={post.id}
-                      className="rounded-2xl bg-surface-container border border-outline/50 p-3 flex flex-col gap-2.5 shadow-md"
+                      className="figma-card flex flex-col gap-2.5 rounded-2xl p-3"
                     >
-                      <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-surface-container-lowest">
+                      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#FFF0E4]">
                         <Image
                           src={post.image_url}
                           alt={post.author_name}
                           fill
                           className="object-cover"
                         />
-                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-[10px] font-bold text-white uppercase">
-                          Photo • Frame: {post.frame_id}
+                        <span className="figma-pill absolute left-2 top-2 bg-[#4A3B38] text-white">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#E7C27A]" />
+                          #FestMoment • {post.frame_id}
+                        </span>
+                        <span className="figma-pill absolute right-2 top-2 bg-[#F6C89F] text-[#5A3A22]">
+                          2m ago
                         </span>
                       </div>
 
@@ -578,7 +530,7 @@ export default function HostDashboardPage() {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-outline/20">
+                      <div className="grid grid-cols-2 gap-2 border-t border-outline/30 pt-2">
                         {post.visibility === "approved" ? (
                           <button
                             onClick={() => handleModerate("post", post.id, "hide")}
@@ -618,7 +570,7 @@ export default function HostDashboardPage() {
                   .map((note) => (
                     <div
                       key={note.id}
-                      className="rounded-2xl bg-surface-container border border-outline/50 p-4 flex flex-col justify-between gap-3 shadow-md"
+                      className="figma-card flex flex-col justify-between gap-3 rounded-2xl border-[#E8C87A] bg-[#FDF2D8] p-4"
                     >
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">
@@ -636,7 +588,7 @@ export default function HostDashboardPage() {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-outline/20 text-xs">
+                      <div className="grid grid-cols-3 gap-1.5 border-t border-[#C0872B]/30 pt-2 text-xs">
                         {note.is_pinned ? (
                           <button
                             onClick={() => handleModerate("note", note.id, "unpin")}
