@@ -99,7 +99,7 @@ export default function LandingHostPortal() {
   };
 
   return (
-    <ThemeWrapper themeKey="midnight-neon">
+    <ThemeWrapper themeKey={selectedTheme}>
       <div className="flex flex-col min-h-screen bg-surface text-on-surface">
         {/* Navigation Header */}
         <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
@@ -348,24 +348,35 @@ export default function LandingHostPortal() {
                   </div>
 
                   <div className="grid grid-cols-4 gap-2 pt-2 border-t border-outline/20">
-                    {THEME_KEYS.map((k) => (
-                      <div
-                        key={k}
-                        className="p-2 rounded-xl text-center flex flex-col items-center gap-1 border border-outline/40"
-                        style={{ backgroundColor: THEMES[k].bg }}
-                      >
-                        <span
-                          className="w-3.5 h-3.5 rounded-full shadow-sm"
-                          style={{ backgroundColor: THEMES[k].accent }}
-                        />
-                        <span
-                          className="text-[9px] font-bold truncate max-w-full"
-                          style={{ color: THEMES[k].text }}
+                    {THEME_KEYS.map((k) => {
+                      const isActive = selectedTheme === k;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setSelectedTheme(k)}
+                          className={`p-2 rounded-xl text-center flex flex-col items-center gap-1 border transition-all active:scale-95 ${
+                            isActive
+                              ? "border-primary ring-2 ring-primary/40"
+                              : "border-outline/40 hover:border-outline"
+                          }`}
+                          style={{ backgroundColor: THEMES[k].bg }}
+                          aria-pressed={isActive}
+                          title={THEMES[k].name}
                         >
-                          {THEMES[k].name.split(" ")[0]}
-                        </span>
-                      </div>
-                    ))}
+                          <span
+                            className="w-3.5 h-3.5 rounded-full shadow-sm"
+                            style={{ backgroundColor: THEMES[k].accent }}
+                          />
+                          <span
+                            className="text-[9px] font-bold truncate max-w-full"
+                            style={{ color: THEMES[k].text }}
+                          >
+                            {THEMES[k].name.split(" ")[0]}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

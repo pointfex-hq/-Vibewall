@@ -887,3 +887,22 @@ Verified that Chain Story Add Photo uploads already route exclusively to `api.ad
 - `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
 
 Remaining issues: none for this issue.
+
+## 34. Landing Page — Interactive Theme Selector
+
+### 34.1 Summary
+
+Made the "4 Official Event Themes" showcase on the landing page interactive: clicking a theme swatch now switches the page theme (via `selectedTheme` state applied to `ThemeWrapper`), and the selection is reflected in the Create Room modal's theme pills.
+
+### 34.2 Implementation
+
+- `app/page.tsx`: `ThemeWrapper` now uses `themeKey={selectedTheme}`; showcase swatches are buttons that call `setSelectedTheme(k)` with active ring styling.
+
+### 34.3 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 53/53 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none.
