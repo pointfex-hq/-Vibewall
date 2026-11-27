@@ -145,6 +145,10 @@ async function runUITests() {
     const headerTitle = await page.textContent("h1");
     logResult("Wall Event Header Title", headerTitle.includes("Dynamic University Fest 2026"));
 
+    // Verify Photo Quota Meter
+    const quotaMeter = await page.locator("text=/[0-9]+ \\/ 15/").first().isVisible();
+    logResult("Photo Quota Meter Rendered", quotaMeter);
+
     // Copy Code Button
     const copyBtn = page.locator("button:has-text('#VIBE26')");
     await copyBtn.click();

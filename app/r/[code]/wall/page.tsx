@@ -20,6 +20,7 @@ import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
 import ErrorState from "@/components/ErrorState";
 import PhotoCard from "@/components/PhotoCard";
 import NoteCard from "@/components/NoteCard";
+import PhotoQuotaMeter from "@/components/PhotoQuotaMeter";
 import PollCard from "@/components/PollCard";
 import StoryStrip from "@/components/StoryStrip";
 import ComposerModal, { ComposerMode } from "@/components/ComposerModal";
@@ -618,6 +619,9 @@ export default function LiveSocialWallPage() {
               </div>
             </div>
           </section>
+
+          {/* Photo quota progress meter */}
+          <PhotoQuotaMeter current={feed.posts.length} loading={isLoading} />
 
           {/* 2. Interactive Poll (if active) — keyed by poll id so a new poll resets selection state */}
           {feed.active_poll && (

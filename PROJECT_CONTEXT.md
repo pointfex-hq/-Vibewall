@@ -817,3 +817,28 @@ Added a dependency-free horizontal swipe-to-like gesture to PhotoCard and NoteCa
 - `npm run build` → PASSED (`Compiled successfully`).
 
 Remaining issues: none for this issue.
+
+## 31. Issue #11 — Room Photo Quota Progress Meter
+
+### 31.1 Summary
+
+Added a reusable `PhotoQuotaMeter` component displaying current photo count, 15-photo quota, progress bar, remaining count, and full-quota state. Rendered on the wall; updates automatically via `feed.posts.length` after uploads/realtime.
+
+### 31.2 Implementation
+
+- `components/PhotoQuotaMeter.tsx` (new): reusable meter with compact + full variants, loading state, full state, ARIA attributes.
+- `app/r/[code]/wall/page.tsx`: rendered meter above the poll using `feed.posts.length`.
+- `tests/e2e-ui-test.mjs`: added "Photo Quota Meter Rendered" assertion.
+
+### 31.3 Notes
+
+- Quota source: project spec (15 photos). The backend enforces 15 per user per room; the meter reflects the room feed's current photo count against the 15 display threshold. If a room-wide cap is required, coordinate with Alvi (no new API fields invented).
+
+### 31.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 53/53 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none for this issue.
