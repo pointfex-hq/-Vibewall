@@ -52,6 +52,16 @@ export default function ComposerModal({
   const [isCompressing, setIsCompressing] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const compressionIdRef = useRef(0);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const revokePreviewUrl = (url: string | null | undefined) => {
+    if (url && typeof url === "string" && url.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {}
+    }
+  };
 
   // Note tab states
   const [noteBody, setNoteBody] = useState("");
@@ -72,9 +82,12 @@ export default function ComposerModal({
     .toUpperCase();
 
   // Reset transient photo state when the composer closes so a previous
-  // selection (frame, file) can never leak into a new session.
+  // selection (frame, file) can never leak into a new session. Revoke any
+  // temporary object URL to avoid memory leaks (issue #34).
   useEffect(() => {
     if (!isOpen) {
+      revokePreviewUrl(previewUrlRef.current);
+      previewUrlRef.current = null;
       setSelectedFile(null);
       setPreviewResult(null);
       setSelectedFrame("classic");
@@ -82,22 +95,48 @@ export default function ComposerModal({
     }
   }, [isOpen]);
 
+  // Keep previewUrlRef in sync with previewResult.
+  useEffect(() => {
+    previewUrlRef.current = previewResult?.previewUrl ?? null;
+  }, [previewResult]);
+
+  // Revoke the temporary object URL on unmount.
+  useEffect(() => {
+    return () => {
+      revokePreviewUrl(previewUrlRef.current);
+      previewUrlRef.current = null;
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const requestId = ++compressionIdRef.current;
+    const previousUrl = previewUrlRef.current;
+
     setErrorMessage(null);
     setIsCompressing(true);
     try {
       const res = await validateAndCompressImage(file);
+      // Ignore stale results if a newer selection was made (issue #34).
+      if (requestId !== compressionIdRef.current) {
+        revokePreviewUrl(res.previewUrl);
+        return;
+      }
+      // Release the previous preview URL now that the new one is ready.
+      revokePreviewUrl(previousUrl);
       setSelectedFile(res.file);
       setPreviewResult(res);
     } catch (err: any) {
+      if (requestId !== compressionIdRef.current) return;
       setErrorMessage(err.message || "Failed to process image");
     } finally {
-      setIsCompressing(false);
+      if (requestId === compressionIdRef.current) {
+        setIsCompressing(false);
+      }
     }
   };
 
@@ -123,7 +162,9 @@ export default function ComposerModal({
         // Blocked by the auth guard — keep the composer open for retry.
         return;
       }
-      // Reset & close
+      // Reset & close (release the temporary preview URL)
+      revokePreviewUrl(previewUrlRef.current);
+      previewUrlRef.current = null;
       setSelectedFile(null);
       setPreviewResult(null);
       onClose();
@@ -283,6 +324,8 @@ export default function ComposerModal({
                     <button
                       type="button"
                       onClick={() => {
+                        revokePreviewUrl(previewUrlRef.current);
+                        previewUrlRef.current = null;
                         setPreviewResult(null);
                         setSelectedFile(null);
                       }}

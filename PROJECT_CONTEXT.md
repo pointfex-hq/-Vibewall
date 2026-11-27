@@ -727,3 +727,26 @@ Resolved missing `tailwindcss-animate` dependency/configuration and undefined CS
 - `npm run lint` → NOT VERIFIED (interactive `next lint` setup prompt; no ESLint config).
 
 Remaining issues: none for this issue.
+
+## 27. Issue #34 — Object URL Memory Leaks in Photo Preview and Compression
+
+### 27.1 Summary
+
+Prevented browser memory buildup from unreleased temporary Object URLs during photo selection, preview, compression, and replacement.
+
+### 27.2 Implementation
+
+- `lib/upload/compress.ts`: revoked the temporary URL in `canvasCompressFallback` on both load and error paths.
+- `components/ComposerModal.tsx`: added `compressionIdRef` for stale-async safety; revoke previous preview URL on replacement, clear, submit success, close, and unmount; only revoke `blob:` URLs (never Cloudinary/external URLs).
+
+### 27.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 27.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.

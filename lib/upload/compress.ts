@@ -106,7 +106,10 @@ async function canvasCompressFallback(file: File, maxDim: number, quality: numbe
         quality
       );
     };
-    img.onerror = () => reject(new Error("Failed to load image for canvas compression"));
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to load image for canvas compression"));
+    };
     img.src = url;
   });
 }
