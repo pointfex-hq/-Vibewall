@@ -126,19 +126,7 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
       return NextResponse.json({ note });
     }
 
-    // 9. POST /api/rooms/[code]/stories
-    if (method === "POST" && path.length === 3 && path[0] === "rooms" && path[2] === "stories") {
-      const story = mockDB.createStory(path[1], body.prompt);
-      return NextResponse.json({ story });
-    }
-
-    // 10. POST /api/stories/[id]/entries
-    if (method === "POST" && path.length === 3 && path[0] === "stories" && path[2] === "entries") {
-      const entry = mockDB.addStoryEntry(path[1], body.image_url, body.author_name);
-      return NextResponse.json({ entry });
-    }
-
-    // 11. POST /api/rooms/[code]/polls
+    // 9. POST /api/rooms/[code]/polls
     if (method === "POST" && path.length === 3 && path[0] === "rooms" && path[2] === "polls") {
       const poll = mockDB.createPoll(path[1], body.question, body.options);
       return NextResponse.json({ poll });

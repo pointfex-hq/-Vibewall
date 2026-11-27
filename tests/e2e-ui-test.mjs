@@ -163,13 +163,13 @@ async function runUITests() {
       logResult("Poll Voted Status Feedback Displayed", voteRecorded);
     }
 
-    // Verify Chain Story Strip
-    const storyStrip = await page.locator("text=CHAIN STORY").isVisible();
-    logResult("Chain Story Strip Rendered", storyStrip);
-
     // Verify Pinned Note
     const pinnedNote = await page.locator("text=Pinned Vibe Note").first().isVisible();
     logResult("Pinned Vibe Note Highlighted at Top", pinnedNote);
+
+    // Verify Chain Story feature removed
+    const chainStoryPresent = await page.locator("text=CHAIN STORY").first().isVisible().catch(() => false);
+    logResult("Chain Story UI Absent", !chainStoryPresent);
 
     // Guest Poll Vote — click shows the auth modal (shared guard with the like flow)
     const pollOption = page.locator("button:has-text('Arijit Singh')").first();
@@ -243,51 +243,8 @@ async function runUITests() {
       logResult("Poll Vote While Authenticated Skips Auth Modal", !(await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible()));
     }
 
-    // Chain Story — StoryStrip → Add Photo uploads to the active story (not the feed)
-    const getStoryId = () =>
-      page.evaluate(() => {
-        const store = globalThis[Symbol.for("vibewall.mock.store")];
-        const story = [...(store?.stories?.values() || [])].find((s) => s.is_active);
-        return story ? story.id : null;
-      });
-    const getStoryEntries = (sid) =>
-      page.evaluate((storyId) => {
-        const store = globalThis[Symbol.for("vibewall.mock.store")];
-        const story = [...(store?.stories?.values() || [])].find((s) => s.id === storyId);
-        return story ? story.entries.length : -1;
-      }, sid);
-    const getPostCount = () => page.evaluate(() => globalThis[Symbol.for("vibewall.mock.store")]?.posts?.size || 0);
-
-    const storyId = await getStoryId();
-    const storyEntriesBefore = storyId ? await getStoryEntries(storyId) : -1;
-    const postsBeforeStoryUpload = await getPostCount();
-
-    const addPhotoBtn = page.locator("text=Add Photo").first();
-    if (storyId && (await addPhotoBtn.isVisible())) {
-      await addPhotoBtn.click();
-      await page.waitForTimeout(1000);
-      logResult("Story Add Photo Opens Composer", await page.locator("text=Add to Chain Story").isVisible());
-      logResult("Story Entry Mode Hides Frame Selector", !(await page.locator("text=Choose Frame Style").isVisible()));
-      const png = await page.evaluate(() => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1;
-        canvas.height = 1;
-        return canvas.toDataURL("image/png");
-      });
-      await page.setInputFiles("input[type=file]", {
-        name: "story-photo.png",
-        mimeType: "image/png",
-        buffer: Buffer.from(png.split(",")[1], "base64"),
-      });
-      await page.locator("img[alt='Upload preview']").waitFor({ state: "visible", timeout: 8000 });
-      await page.click("button:has-text('Add to Chain Story')");
-      await page.waitForTimeout(1500);
-      const storyEntriesAfter = await getStoryEntries(storyId);
-      logResult("Story Upload Adds Entry To Chain Story", storyEntriesAfter === storyEntriesBefore + 1, `before=${storyEntriesBefore} after=${storyEntriesAfter}`);
-      logResult("Story Upload Does Not Post To Feed", (await getPostCount()) === postsBeforeStoryUpload);
-    }
-
     // Standard Add Photo (bottom bar) still posts to the feed via api.createPost
+    const getPostCount = () => page.evaluate(() => globalThis[Symbol.for("vibewall.mock.store")]?.posts?.size || 0);
     const postsBeforeStandard = await getPostCount();
     await page.click("button:has-text('Post Photo')");
     await page.locator("text=Post Photo to Live Wall").waitFor({ state: "visible", timeout: 8000 });
@@ -310,37 +267,6 @@ async function runUITests() {
     logResult("Standard Add Photo Still Posts To Feed", postsAfterStandard > postsBeforeStandard, `before=${postsBeforeStandard} after=${postsAfterStandard}`);
 
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "3-live-wall-full.png") });
-
-    // ----------------------------------------------------
-    // TEST SUITE 4: Route /r/[code]/story/[storyId] (Story Viewer)
-    // ----------------------------------------------------
-    console.log("\n>>> Testing Route 4: Chain Story Viewer (/r/VIBE26/story/story-fest-1)");
-    await page.goto(`${BASE_URL}/r/VIBE26/story/story-fest-1`, { waitUntil: "domcontentloaded" });
-    // Wait for the story stage to finish loading.
-    await page.waitForFunction(
-      () => document.body.innerText.includes("Add Your Photo to this Chain Story"),
-      null,
-      { timeout: 8000 }
-    );
-
-    // Verify 9:16 Fullscreen Immersive Stage
-    const authorHeader = await page.locator("span:has-text('Murad FestCrew'), span:has-text('FestCrew'), span:has-text('Fest')").first().isVisible();
-    logResult("Story Author Header Telemetry", authorHeader);
-
-    // Verify Segmented Progress Bar
-    const progressBars = await page.locator("div.h-full.bg-primary.rounded-full").count();
-    logResult("Multi-segment Progress Bars", progressBars >= 1, `${progressBars} segments`);
-
-    // Verify Add Photo CTA
-    const addPhotoCTA = await page.locator("button:has-text('Add Your Photo')").isVisible();
-    logResult("Add Photo to Story CTA Visible", addPhotoCTA);
-
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "4-chain-story-viewer.png") });
-
-    // Close Story -> return to wall
-    await page.click("a[href*='/r/VIBE26/wall']");
-    await page.waitForURL("**/r/VIBE26/wall", { timeout: 8000 });
-    logResult("Story Close Returns to Live Wall", page.url().includes("/r/VIBE26/wall"));
 
     // ----------------------------------------------------
     // TEST SUITE 5: Route /host/[code] (Host Admin Dashboard)
