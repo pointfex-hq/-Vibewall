@@ -21,20 +21,7 @@ export default function LandingHostPortal() {
   // Create room modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [roomTitle, setRoomTitle] = useState("");
-  const [selectedTheme, setSelectedTheme] = useState<ThemeKey>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("vibewall_default_theme");
-      if (stored && THEME_KEYS.includes(stored as ThemeKey)) return stored as ThemeKey;
-    }
-    return "midnight-neon";
-  });
-
-  // Persist the chosen theme as the default for the landing page and new rooms.
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("vibewall_default_theme", selectedTheme);
-    }
-  }, [selectedTheme]);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeKey>("midnight-neon");
   const [expiresInHours, setExpiresInHours] = useState<number>(24);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
