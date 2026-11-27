@@ -132,9 +132,11 @@ export default function LandingHostPortal() {
                   </div>
                   <button
                     onClick={handleAuth}
-                    className="hidden sm:inline-flex text-xs font-semibold text-on-surface-variant hover:text-on-surface px-2.5 py-1.5 rounded-lg border border-outline/50 hover:bg-surface-container-high transition-colors"
+                    aria-label="Sign Out"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-on-surface px-2.5 py-1.5 rounded-lg border border-outline/50 hover:bg-surface-container-high transition-colors"
                   >
-                    Sign Out
+                    <Icon name="log_out" size={14} className="text-primary" />
+                    <span className="hidden sm:inline">Sign Out</span>
                   </button>
                 </div>
               ) : (

@@ -41,6 +41,7 @@ const ICON_MAP: Record<string, keyof typeof lucide> = {
   how_to_vote: "Vote",
   keyboard: "Keyboard",
   login: "LogIn",
+  log_out: "LogOut",
   location_on: "MapPin",
   more_horiz: "MoreHorizontal",
   more_vert: "EllipsisVertical",

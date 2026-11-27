@@ -750,3 +750,27 @@ Prevented browser memory buildup from unreleased temporary Object URLs during ph
 - `npm run build` → PASSED (`Compiled successfully`).
 
 Remaining issues: none for this issue.
+
+## 28. Issue #37 — Sign Out Accessible on Mobile
+
+### 28.1 Summary
+
+Fixed the responsive navigation issue that hid the Sign Out button below 640px by removing `hidden sm:inline-flex` and rendering a compact icon button with a responsive text label, preserving desktop/tablet layout.
+
+### 28.2 Implementation
+
+- `app/page.tsx`: Sign Out button now always visible; shows `log_out` icon on mobile and "Sign Out" text on `sm+`.
+- `components/icons.tsx`: added `log_out` → `LogOut` mapping.
+
+### 28.3 Tests
+
+- Responsive probe: Sign Out visible at 320/375/390/430px with no horizontal overflow; sign-out clears mock state and shows signed-out state.
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 28.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.
