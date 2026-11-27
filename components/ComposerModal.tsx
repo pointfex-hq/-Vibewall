@@ -88,6 +88,7 @@ export default function ComposerModal({
     if (!isOpen) {
       revokePreviewUrl(previewUrlRef.current);
       previewUrlRef.current = null;
+      setIsCompressing(false);
       setSelectedFile(null);
       setPreviewResult(null);
       setSelectedFrame("classic");
@@ -415,7 +416,7 @@ export default function ComposerModal({
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <label className="font-heading font-semibold text-xs text-on-surface-variant">
-                    Your Vibe Note / Confession
+                    Your Vibe Note
                   </label>
                   <span
                     className={`font-body text-xs font-semibold ${

@@ -906,3 +906,33 @@ Made the "4 Official Event Themes" showcase on the landing page interactive: cli
 - `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
 
 Remaining issues: none.
+
+## 35. Merge of `origin/main` into `feat/frontend-ui` (conflict resolution)
+
+### 35.1 Summary
+
+Resolved all conflicts from merging backend-core work (`origin/main`) into the frontend branch, preserving both sides' intended behavior. No product feature was removed: Chain Story, issue fixes, and the interactive landing theme selector remain intact.
+
+### 35.2 Conflict resolutions
+
+- `app/host/[code]/page.tsx`: venue screen URL resolved from the room's real `screen_token` (issue #24), with `sessionStorage` cache from main as fallback.
+- `app/page.tsx`: kept the real active-rooms grid (issue #24), interactive theme showcase, and mobile Sign Out; added main's venue-URL caching on room creation and adopted the renamed "Continue with Google" CTA.
+- `app/r/[code]/story/[storyId]/page.tsx`: kept `ErrorState` plus main's `!story` "Return to Wall" fallback and load resets.
+- `app/r/[code]/wall/page.tsx`: kept `ErrorState`, added main's closed-room handling.
+- `app/screen/[token]/page.tsx`: one structured `loadError` state; `ErrorState` UI retained; room-closed event now sets a structured error.
+- `components/ComposerModal.tsx`: kept the `compressionIdRef` / object-URL revoke lifecycle (issue #34) plus main's compressing-state reset.
+- `lib/api.ts`: kept token-refresh-aware `send` helper and added structured network-error handling (issue #24) with `await` so aborted requests are caught.
+- `lib/mock-data.ts`: adopted main's `mockError` helper and per-voter poll vote tracking.
+- `package.json` / `package-lock.json`: kept both `tailwindcss-animate` and `postgres`; ran `npm install`.
+- `tests/e2e-ui-test.mjs`: restored the local Playwright executable path and updated assertions for main's renamed sign-in CTA and per-voter poll votes.
+
+### 35.3 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 54/54 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+- `node verify-mock-api-errors.mjs` → 23/23 PASS.
+- `npm test` → PASSED (backend DB test skipped without a disposable database).
+
+Remaining issues: none.

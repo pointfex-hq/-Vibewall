@@ -80,6 +80,10 @@ export default function LandingHostPortal() {
         expires_in_hours: expiresInHours,
       });
       fireRoomConfetti();
+      // Cache the venue URL so the host dashboard can open the correct screen.
+      if (typeof window !== "undefined" && res.screen_url) {
+        sessionStorage.setItem(`venue:${res.room.id}`, res.screen_url);
+      }
       router.push(`/host/${res.room.code}`);
     } catch (err: any) {
       setCreateError(err.message || "Failed to create room");
@@ -147,7 +151,7 @@ export default function LandingHostPortal() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-bold text-on-surface transition-all active:scale-95"
                 >
                   <Icon name="login" size={16} className="text-primary" />
-                  <span>Host Sign In</span>
+                  <span>Continue with Google</span>
                 </button>
               )}
             </div>
@@ -216,7 +220,7 @@ export default function LandingHostPortal() {
             <div className="flex items-center justify-between border-b border-outline/30 pb-2">
               <h2 className="font-heading font-bold text-base sm:text-lg text-on-surface flex items-center gap-2">
                 <Icon name="bolt" size={20} className="text-primary" />
-                <span>Active Public Rooms</span>
+                <span>Event Rooms</span>
               </h2>
               <span className="font-body text-xs text-on-surface-variant">
                 Instant join via QR / Link

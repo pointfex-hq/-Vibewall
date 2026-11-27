@@ -1,0 +1,12 @@
+project_id = "vibewall"
+[auth]
+site_url = "http://localhost:3000"
+enable_signup = true
+[auth.email]
+enable_signup = false
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+[realtime]
+enabled = true

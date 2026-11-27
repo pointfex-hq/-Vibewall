@@ -38,6 +38,10 @@ export async function validateAndCompressImage(file: File): Promise<CompressionR
     compressedBlob = await canvasCompressFallback(file, 2048, 0.85);
   }
 
+  if (compressedBlob.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error("This photo still exceeds 2 MB. Please choose a smaller photo.");
+  }
+
   const compressedFile = new File([compressedBlob], file.name, {
     type: file.type,
     lastModified: Date.now(),

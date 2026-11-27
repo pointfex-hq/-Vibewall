@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import QRCode from "qrcode";
+import { roomQrDataUrl } from "@/lib/room-qr";
 import {
   FeedResponse,
   PostDTO,
@@ -147,19 +147,19 @@ export default function HostDashboardPage() {
       setFeed(feedData);
 
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      // Resolve venue screen URL from the room's actual screen token (issue #24).
+      // Resolve venue screen URL from the room's real screen token (issue #24),
+      // falling back to the URL cached by the landing page on room creation.
       let resolvedScreenUrl = preview.screen_url;
       const screenToken = preview.screen_token || preview.room?.screen_token;
       if (!resolvedScreenUrl && screenToken) {
         resolvedScreenUrl = `${origin}/screen/${encodeURIComponent(screenToken)}`;
       }
+      if (!resolvedScreenUrl && typeof window !== "undefined") {
+        resolvedScreenUrl = sessionStorage.getItem(`venue:${preview.room.id}`) || "";
+      }
       if (resolvedScreenUrl) setScreenUrl(resolvedScreenUrl);
 
-      const qr = await QRCode.toDataURL(`${origin}/r/${roomCode}`, {
-        width: 320,
-        margin: 2,
-        color: { dark: "#000000", light: "#FFFFFF" },
-      });
+      const qr = await roomQrDataUrl(origin, roomCode, 320);
       setQrCodeUrl(qr);
     } catch (err: any) {
       console.error("Dashboard load failed:", err);
@@ -184,6 +184,7 @@ export default function HostDashboardPage() {
     if (!room?.id) return;
 
     const unsubscribe = subscribeToRoom(room.id, {
+      onRoomClosed: () => setRoom(prev => prev && { ...prev, status: "closed" }),
       onNewPost: ({ post }) => {
         setFeed((prev) => applyNewPost(prev, post));
       },
@@ -259,7 +260,10 @@ export default function HostDashboardPage() {
     if (!confirm("Rotate screen token? Existing projector displays will need the new link.")) return;
     try {
       const res = await api.updateRoom(room.code, { rotate_screen_token: true });
-      if (res.screen_url) setScreenUrl(res.screen_url);
+      if (res.screen_url) {
+        sessionStorage.setItem(`venue:${room.id}`, res.screen_url);
+        setScreenUrl(res.screen_url);
+      }
       showToast("Screen display token rotated successfully");
     } catch (err: any) {
       alert(err.message || "Failed to rotate token");
@@ -401,14 +405,14 @@ export default function HostDashboardPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Link
+              {screenUrl ? <Link
                 href={screenUrl}
                 target="_blank"
                 className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
               >
                 <Icon name="tv" size={16} />
                 <span>Open Venue Display</span>
-              </Link>
+              </Link> : <button onClick={handleRotateToken} className="rounded-full border px-3 py-1.5 text-xs">Generate projector link</button>}
 
               <button
                 onClick={() => copyToClipboard(window.location.origin + `/r/${roomCode}`, "Guest Invite URL")}

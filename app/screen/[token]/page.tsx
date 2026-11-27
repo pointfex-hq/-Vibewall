@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import QRCode from "qrcode";
+import { roomQrDataUrl } from "@/lib/room-qr";
 import { ScreenResponse, RoomDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { subscribeToRoom } from "@/lib/supabase";
@@ -38,14 +38,7 @@ export default function VenueDisplayPage() {
 
         // Generate high-res QR code for participants in the venue
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const qr = await QRCode.toDataURL(`${origin}/r/${data.room.code}`, {
-          width: 380,
-          margin: 1,
-          color: {
-            dark: "#FAFAFA",
-            light: "#00000000",
-          },
-        });
+        const qr = await roomQrDataUrl(origin, data.room.code, 380);
         setQrCodeDataUrl(qr);
       } catch (err: any) {
         console.error("Venue screen load failed:", err);
@@ -67,6 +60,7 @@ export default function VenueDisplayPage() {
     if (!screenData?.room?.id) return;
 
     const unsubscribe = subscribeToRoom(screenData.room.id, {
+      onRoomClosed: () => setLoadError({ message: "Room is closed" }),
       onNewPost: ({ post }) => {
         setScreenData((prev) =>
           prev

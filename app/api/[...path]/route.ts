@@ -1,3 +1,4 @@
+import { handle } from "../../../server/api.mjs";
 import { NextRequest, NextResponse } from "next/server";
 import { mockDB } from "@/lib/mock-data";
 
@@ -33,6 +34,10 @@ export async function PATCH(
 }
 
 async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
+  if (process.env.NEXT_PUBLIC_USE_MOCK !== "true") {
+    return handle(req, { params: Promise.resolve({ path }) });
+  }
+
   const method = req.method;
   const pathStr = path.join("/");
   const url = new URL(req.url);
@@ -181,7 +186,7 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
     return errorResponse(404, "VALIDATION_ERROR", "Route not found");
   } catch (err: any) {
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: err?.message || "Internal Error" } },
+      { error: { code: err?.code || "INTERNAL_ERROR", message: err?.message || "Internal Error" } },
       { status: err?.status || 500 }
     );
   }

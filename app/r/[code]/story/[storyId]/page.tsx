@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { StoryDTO, StoryEntryDTO } from "@/types/vibewall";
+import { StoryDTO, StoryEntryDTO, ThemeKey } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { validateAndCompressImage } from "@/lib/upload/compress";
 import ErrorState from "@/components/ErrorState";
@@ -19,6 +19,7 @@ export default function ChainStoryViewer() {
   const roomCode = String(params.code || "").toUpperCase();
   const storyId = String(params.storyId || "");
 
+  const [theme, setTheme] = useState<ThemeKey>();
   const [story, setStory] = useState<StoryDTO | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -59,12 +60,15 @@ export default function ChainStoryViewer() {
     async function loadStory() {
       setIsLoading(true);
       setLoadError(null);
+      setErrorMessage("");
+      setStory(null);
+      setCurrentIndex(0);
       try {
-        const feed = await api.getFeed(roomCode);
+        const [feed, preview] = await Promise.all([api.getFeed(roomCode), api.getRoomPreview(roomCode)]);
+        setTheme(preview.room.theme);
         if (feed.active_story && feed.active_story.id === storyId) {
           setStory(feed.active_story);
-        } else if (feed.active_story) {
-          setStory(feed.active_story);
+
         } else {
           setErrorMessage("Story not found or expired.");
         }
@@ -132,6 +136,7 @@ export default function ChainStoryViewer() {
       setErrorMessage("");
       try {
         const compressed = await validateAndCompressImage(file);
+        URL.revokeObjectURL(compressed.previewUrl);
         const uploadRes = await api.uploadPhoto(compressed.file);
         const authorName =
           typeof auth.user?.user_metadata?.full_name === "string"
@@ -175,7 +180,7 @@ export default function ChainStoryViewer() {
   const currentEntry: StoryEntryDTO | undefined = story?.entries[currentIndex];
 
   return (
-    <ThemeWrapper themeKey="midnight-neon">
+    <ThemeWrapper themeKey={theme}>
       <div className="fixed inset-0 z-50 bg-black text-white flex flex-col select-none overflow-hidden">
         <input
           ref={fileInputRef}
@@ -185,6 +190,7 @@ export default function ChainStoryViewer() {
           onChange={handleAddPhoto}
         />
 
+        {errorMessage && <p role="alert" className="relative z-50 bg-red-950 p-3 text-center text-white">{errorMessage}</p>}
         {isLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
             <Icon name="progress_activity" size={36} className="animate-spin text-primary" />
@@ -208,7 +214,9 @@ export default function ChainStoryViewer() {
               />
             </div>
           </div>
-        ) : !story || story.entries.length === 0 ? (
+        ) : !story ? (
+          <Link className="m-auto underline" href={`/r/${roomCode}/wall`}>Return to Wall</Link>
+        ) : story.entries.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
             <Icon name="auto_stories" size={48} className="text-secondary" />
             <h2 className="font-heading font-bold text-lg">No Story Moments Yet</h2>
@@ -239,7 +247,7 @@ export default function ChainStoryViewer() {
                   src={currentEntry.image_url}
                   alt={`Story by ${currentEntry.author_name}`}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   priority
                 />
               )}
@@ -297,10 +305,6 @@ export default function ChainStoryViewer() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md">
-                    <Icon name="visibility" size={15} className="text-tertiary" />
-                    <span className="font-body text-xs font-semibold">348</span>
-                  </div>
                   <Link
                     href={`/r/${roomCode}/wall`}
                     className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white/90 hover:text-white flex items-center justify-center"

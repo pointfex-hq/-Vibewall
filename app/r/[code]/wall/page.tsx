@@ -154,6 +154,7 @@ export default function LiveSocialWallPage() {
     if (!room?.id) return;
 
     const unsubscribe = subscribeToRoom(room.id, {
+      onRoomClosed: () => setRoom(prev => prev && { ...prev, status: "closed" }),
       onNewPost: ({ post }) => {
         setFeed((prev) => ({
           ...prev,
@@ -480,6 +481,8 @@ export default function LiveSocialWallPage() {
       setNoteCooldownRemaining(15);
     });
   };
+
+  if (room?.status === "closed") return <main role="status" className="p-8">This room is closed.</main>;
 
   if (loadError) {
     return (

@@ -1,4 +1,4 @@
-import QRCode from "qrcode";
+import { roomQrDataUrl } from "@/lib/room-qr";
 
 export type CardFormat = "story" | "polaroid";
 
@@ -48,17 +48,7 @@ export async function generateVibeCardCanvas(options: VibeCardOptions): Promise<
   ctx.fillRect(0, 0, width, height);
 
   // 2. Generate and load QR code for the room
-  const qrDataUrl = await QRCode.toDataURL(
-    typeof window !== "undefined" ? `${window.location.origin}/r/${roomCode}` : `https://vibewall.app/r/${roomCode}`,
-    {
-      width: 240,
-      margin: 1,
-      color: {
-        dark: "#FAFAFA",
-        light: "#00000000",
-      },
-    }
-  );
+  const qrDataUrl = await roomQrDataUrl(window.location.origin, roomCode, format === "story" ? 220 : 160);
   const qrImage = await loadImage(qrDataUrl);
 
   // 3. Load user photo safely
