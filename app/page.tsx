@@ -198,6 +198,11 @@ export default function LandingHostPortal() {
                 </button>
                 <a
                   href="#live-walls"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById("live-walls")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    window.history.replaceState(null, "", "#live-walls");
+                  }}
                   className="figma-amber-btn px-6 py-3.5 text-sm"
                 >
                   <Icon name="visibility" size={19} />
@@ -246,7 +251,7 @@ export default function LandingHostPortal() {
           </section>
 
           {/* -------------------------- Featured rooms ------------------------- */}
-          <section id="live-walls" className="flex flex-col gap-4">
+          <section id="live-walls" className="scroll-mt-20 flex flex-col gap-4">
             <SectionHeading
               eyebrow="Happening now"
               title="Featured Live Walls"
