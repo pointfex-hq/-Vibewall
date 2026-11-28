@@ -118,15 +118,7 @@ try {
   {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await ctx.newPage();
-    await page.addInitScript(() => {
-      const key = Symbol.for("vibewall.mock.store");
-      globalThis[key] = {
-        rooms: new Map(),
-        posts: new Map(),
-        notes: new Map(),
-        polls: new Map(),
-      };
-    });
+    await page.route("**/api/rooms", (route) => route.fulfill({ json: { rooms: [] } }));
     await page.goto(`${BASE_URL}/`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
     const body = norm(await page.locator("body").innerText());

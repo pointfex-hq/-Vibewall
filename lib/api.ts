@@ -104,13 +104,6 @@ export const api = {
     theme?: ThemeKey;
     expires_in_hours?: number;
   }): Promise<CreateRoomResponse> {
-    if (USE_MOCK) {
-      return mockDB.createRoom({
-        title: data.title,
-        theme: data.theme || "midnight-neon",
-        expires_in_hours: data.expires_in_hours || 24,
-      });
-    }
     return request<CreateRoomResponse>("/api/rooms", {
       method: "POST",
       body: JSON.stringify(data),
@@ -118,72 +111,30 @@ export const api = {
   },
 
   // 1b. GET /api/rooms - List active public rooms
-  async getActiveRooms(): Promise<RoomDTO[]> {
-    if (USE_MOCK) {
-      return mockDB.getActiveRooms();
-    }
-    try {
-      const res = await request<{ rooms: RoomDTO[] }>("/api/rooms");
-      return res.rooms || [];
-    } catch (err: any) {
-      if (err?.status === 404) return [];
-      throw err;
-    }
+  async getActiveRooms(query = ""): Promise<RoomDTO[]> {
+    const search = query ? "?" + new URLSearchParams({ q: query }) : "";
+    const { rooms } = await request<{ rooms: RoomDTO[] }>("/api/rooms" + search);
+    return rooms;
   },
 
   // 2. GET /api/rooms/[code]
   async getRoomPreview(code: string): Promise<RoomPreviewResponse> {
+    const path = `/api/rooms/${encodeURIComponent(code)}`;
     if (USE_MOCK) {
-      let room = mockDB.getRoom(code);
-      if (!room && typeof window !== "undefined") {
-        try {
-          const res = await request<RoomPreviewResponse>(`/api/rooms/${code}`);
-          if (res?.room) {
-            const store = getMockStore();
-            store.rooms.set(code.toUpperCase(), res.room as any);
-            return res;
-          }
-        } catch (err: any) {
-          // Preserve the server's failure semantics (issue #24): a 401/403/5xx or
-          // a network outage must NOT be silently collapsed into "Room not found".
-          // Only a genuine 404 (or successful-but-empty) response falls through to
-          // the local 404 below.
-          if (err?.isNetwork || (err?.status && err.status !== 404)) throw err;
-        }
-      }
-      if (!room) {
-        const err = new Error("Room not found") as any;
-        err.status = 404;
-        err.code = "NOT_FOUND";
-        throw err;
-      }
-      const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-      const screen_token = room.screen_token;
-      const screen_url = screen_token ? `${origin}/screen/${encodeURIComponent(screen_token)}` : undefined;
-      return {
-        room,
-        is_owner: true,
-        is_member: true,
-        screen_token,
-        screen_url,
-      };
+      // The server owns room metadata across tabs. Keep the local feed store in sync.
+      type MockRoom = NonNullable<ReturnType<typeof mockDB.getRoom>>;
+      const preview = await request<RoomPreviewResponse & { room: MockRoom }>(path);
+      getMockStore().rooms.set(preview.room.code, preview.room);
+      return preview;
     }
-    return request<RoomPreviewResponse>(`/api/rooms/${code}`);
+    return request<RoomPreviewResponse>(path);
   },
 
   // 3. POST /api/rooms/[code]/join
   async joinRoom(code: string): Promise<JoinRoomResponse> {
-    if (USE_MOCK) {
-      const room = mockDB.getRoom(code);
-      if (!room) {
-        const err = new Error("Room not found") as any;
-        err.status = 404;
-        throw err;
-      }
-      return { joined: true, room };
-    }
-    return request<JoinRoomResponse>(`/api/rooms/${code}/join`, {
+    return request<JoinRoomResponse>(`/api/rooms/${encodeURIComponent(code)}/join`, {
       method: "POST",
+      body: JSON.stringify({}),
     });
   },
 

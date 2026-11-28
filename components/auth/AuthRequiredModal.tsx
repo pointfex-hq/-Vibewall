@@ -47,9 +47,7 @@ export default function AuthRequiredModal({
     setIsSigningIn(true);
     try {
       // Preserve the current room code & intended destination through OAuth.
-      await signInWithGoogle(
-        typeof window !== "undefined" ? window.location.href : undefined
-      );
+      if (await signInWithGoogle() === "redirecting") return;
       const state = await getAuthState();
       if (!state.isAuthenticated) {
         // OAuth was cancelled or no session was established.

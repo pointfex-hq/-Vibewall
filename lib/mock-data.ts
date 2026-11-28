@@ -196,24 +196,18 @@ export function getMockStore(): MockStore {
 
 // Helper query & mutation operations
 export const mockDB = {
-  getActiveRooms(): RoomDTO[] {
-    const store = getMockStore();
-    const active: RoomDTO[] = [];
+  getActiveRooms(query = ""): RoomDTO[] {
+    const term = query.trim().toLowerCase();
     const now = Date.now();
-    for (const r of store.rooms.values()) {
-      if (r.status === "open" && new Date(r.expires_at).getTime() > now) {
-        active.push({
-          id: r.id,
-          code: r.code,
-          title: r.title,
-          theme: r.theme,
-          status: r.status,
-          expires_at: r.expires_at,
-          screen_token: r.screen_token,
-        });
-      }
-    }
-    return active;
+    const rooms = Array.from(getMockStore().rooms.values())
+      .filter(({ status, expires_at, title, code }) =>
+        status === "open" && Date.parse(expires_at) > now &&
+        (title.toLowerCase().includes(term) || code.toLowerCase().includes(term)))
+      .map(({ id, code, title, theme, status, expires_at }) =>
+        ({ id, code, title, theme, status, expires_at }));
+    return rooms.sort((a, b) =>
+      Number(b.code.toLowerCase() === term) - Number(a.code.toLowerCase() === term) ||
+      a.title.localeCompare(b.title) || a.code.localeCompare(b.code));
   },
 
   deleteRoom(code: string) {
@@ -240,7 +234,11 @@ export const mockDB = {
 
   getRoom(code: string) {
     const store = getMockStore();
-    return store.rooms.get(code.toUpperCase()) || null;
+    const room = store.rooms.get(code.toUpperCase());
+    if (room && Date.parse(room.expires_at) <= Date.now()) {
+      return { ...room, status: "expired" as const };
+    }
+    return room || null;
   },
 
   getRoomByToken(token: string) {

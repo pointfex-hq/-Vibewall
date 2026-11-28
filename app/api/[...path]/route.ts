@@ -57,12 +57,16 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
         theme: body.theme || "midnight-neon",
         expires_in_hours: body.expires_in_hours || 24,
       });
-      return NextResponse.json(res);
+      return NextResponse.json({
+        ...res,
+        qr_url: new URL(`/r/${res.room.code}`, url.origin).href,
+        screen_url: new URL(`/screen/${res.room.screen_token}`, url.origin).href,
+      });
     }
 
     // 1b. GET /api/rooms - List active public rooms
     if (method === "GET" && path.length === 1 && path[0] === "rooms") {
-      const rooms = mockDB.getActiveRooms();
+      const rooms = mockDB.getActiveRooms(url.searchParams.get("q") || "");
       return NextResponse.json({ rooms });
     }
 
@@ -86,6 +90,7 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
     if (method === "POST" && path.length === 3 && path[0] === "rooms" && path[2] === "join") {
       const room = mockDB.getRoom(path[1]);
       if (!room) return errorResponse(404, "VALIDATION_ERROR", "Room not found");
+      if (room.status !== "open") return errorResponse(409, "ROOM_CLOSED", "Room is " + room.status);
       return NextResponse.json({ joined: true, room });
     }
 

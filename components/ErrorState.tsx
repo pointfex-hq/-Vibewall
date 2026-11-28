@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { signInWithGoogle } from "@/lib/supabase";
@@ -34,6 +34,7 @@ export default function ErrorState({
   compact = false,
   className = "",
 }: ErrorStateProps) {
+  const [authError, setAuthError] = useState("");
   const is401 = status === 401 || code === "UNAUTHORIZED";
   const is403 = status === 403 || code === "FORBIDDEN";
   const is404 = status === 404 || code === "NOT_FOUND" || code === "VALIDATION_ERROR";
@@ -45,8 +46,11 @@ export default function ErrorState({
       onSignIn();
       return;
     }
-    const currentUrl = typeof window !== "undefined" ? window.location.href : undefined;
-    await signInWithGoogle(currentUrl);
+    try {
+      await signInWithGoogle(window.location.href);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Google sign-in failed. Please try again.");
+    }
   };
 
   let iconName = "error";
@@ -102,7 +106,7 @@ export default function ErrorState({
           <Icon name={iconName} size={20} />
           <span className="font-heading font-bold text-xs uppercase tracking-wider">{title}</span>
         </div>
-        <p className="font-body text-xs text-on-surface-variant max-w-sm">{description}</p>
+        <p className="font-body text-xs text-on-surface-variant max-w-sm">{authError || description}</p>
         <div className="flex items-center gap-2 mt-1">
           {onRetry && (
             <button
@@ -149,7 +153,7 @@ export default function ErrorState({
           {title}
         </h2>
         <p className="font-body text-sm text-on-surface-variant leading-relaxed">
-          {description}
+          {authError || description}
         </p>
       </div>
 

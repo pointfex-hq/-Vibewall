@@ -21,6 +21,7 @@ import { feed, items, pollDTO, storyDTO } from "./feed.mjs";
 
 const routes = [
   ["POST", "rooms", "create"],
+  ["GET", "rooms", "discover"],
   ["GET", "rooms/:code", "preview"],
   ["PATCH", "rooms/:code", "update"],
   ["POST", "rooms/:code/join", "join"],
@@ -59,11 +60,23 @@ async function run(sql, route, b, actor, url, headers, verifiedAsset) {
   const { action, key } = route;
   const uid = actor?.id ?? null;
   const origin = process.env.APP_ORIGIN;
-  if (!uid && !["preview", "screen"].includes(action))
+  if (!uid && !["discover", "preview", "screen"].includes(action))
     fail(401, "Sign in with Google", "UNAUTHORIZED");
   await sql`set local search_path = wall,public`;
   if (actor && !route.readOnly)
     await sql`insert into users(id,provider_subject,display_name,avatar_url,email) values(${uid},${actor.sub},${actor.name},${actor.avatar},${actor.email}) on conflict(id) do update set display_name=excluded.display_name,avatar_url=excluded.avatar_url,email=excluded.email where (users.display_name,users.avatar_url,users.email) is distinct from (excluded.display_name,excluded.avatar_url,excluded.email)`;
+  if (action === "discover") {
+    const query = (url.searchParams.get("q") || "").trim();
+    const rooms = await sql`
+      select id, code, title, theme, status, expires_at
+      from rooms
+      where status = 'open' and expires_at > now()
+        and (strpos(lower(title), lower(${query}::text)) > 0
+             or strpos(lower(code), lower(${query}::text)) > 0)
+      order by (code = upper(${query}::text)) desc, title, code
+    `;
+    return { rooms };
+  }
   if (action === "create") {
     const title = string(b.title, 200),
       theme = b.theme ?? themes[0],

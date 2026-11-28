@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { RoomDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
-import { getAuthState, signInWithGoogle } from "@/lib/supabase";
+import { signInWithGoogle } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import ErrorState from "@/components/ErrorState";
@@ -15,8 +15,12 @@ import { BrandMark } from "@/components/figma";
 
 export default function QrEntryAuthGate() {
   const params = useParams();
+  const roomCode = String(params.code || "").trim().toUpperCase();
+  return <RoomGate key={roomCode} roomCode={roomCode} />;
+}
+
+function RoomGate({ roomCode }: { roomCode: string }) {
   const router = useRouter();
-  const roomCode = String(params.code || "").toUpperCase();
 
   const auth = useAuth();
   const [mode, setMode] = useState<"scan" | "preview">("preview");
@@ -24,6 +28,7 @@ export default function QrEntryAuthGate() {
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [entryError, setEntryError] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [errorInfo, setErrorInfo] = useState<{
     status?: number;
@@ -32,19 +37,24 @@ export default function QrEntryAuthGate() {
   } | null>(null);
   const [manualCode, setManualCode] = useState(roomCode);
 
+  const active = useRef(false);
+
   // Duplicate-join guards
   const joinInProgressRef = useRef(false);
   const hasJoinedRef = useRef(false);
 
   useEffect(() => {
+    active.current = true;
+    let cancelled = false;
     async function loadData() {
       setIsLoading(true);
       setErrorMessage("");
       setErrorInfo(null);
       try {
         const res = await api.getRoomPreview(roomCode);
-        setRoom(res.room);
+        if (!cancelled) setRoom(res.room);
       } catch (err: any) {
+        if (cancelled) return;
         setErrorMessage(err.message || "Unable to find or verify this room.");
         setErrorInfo({
           status: err?.status,
@@ -52,10 +62,14 @@ export default function QrEntryAuthGate() {
           isNetwork: Boolean(err?.isNetwork),
         });
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
-    if (roomCode) loadData();
+    void loadData();
+    return () => {
+      cancelled = true;
+      active.current = false;
+    };
   }, [roomCode]);
 
   // Auto-join once the authenticated session is confirmed after an OAuth
@@ -74,60 +88,45 @@ export default function QrEntryAuthGate() {
 
     joinInProgressRef.current = true;
     setIsJoining(true);
-    setErrorMessage("");
+    setEntryError("");
     try {
       await api.joinRoom(room.code);
+      if (!active.current) return;
       hasJoinedRef.current = true;
       router.push(`/r/${room.code}/wall`);
     } catch (err: any) {
-      const state = await getAuthState().catch(() => null);
-      if (!state?.isAuthenticated) {
-        setErrorMessage(
-          "Your Google session expired. Sign in again to enter the room."
-        );
-      } else {
-        setErrorMessage(err.message || "Failed to join room. Please try again.");
-      }
+      if (active.current) setEntryError(err.message || "Failed to join room. Please try again.");
     } finally {
       joinInProgressRef.current = false;
-      setIsJoining(false);
+      if (active.current) setIsJoining(false);
     }
   };
 
   const handleJoin = async () => {
-    if (!room || room.status !== "open") return;
-    // Interactive entry requires an authenticated Google session.
-    if (!auth.isAuthenticated) return;
-    await joinAndEnter();
+    if (auth.isAuthenticated) await joinAndEnter();
   };
 
   const handleGoogleSignIn = async () => {
     if (isGoogleLoading) return;
     setIsGoogleLoading(true);
-    setErrorMessage("");
+    setEntryError("");
     try {
-      // Preserve the current room code and intended destination through OAuth.
-      await signInWithGoogle(
-        typeof window !== "undefined" ? window.location.href : undefined
-      );
-      const state = await getAuthState();
-      if (state.isAuthenticated) {
-        await joinAndEnter();
-      } else {
-        setErrorMessage("Google sign-in didn't complete. Please try again.");
-      }
+      await signInWithGoogle(window.location.href);
     } catch (err: any) {
-      setErrorMessage("Google sign-in failed. Please try again.");
-    } finally {
+      setEntryError(err.message || "Google sign-in failed. Please try again.");
       setIsGoogleLoading(false);
     }
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (manualCode.trim()) {
-      router.push(`/r/${manualCode.trim().toUpperCase()}`);
+    const clean = manualCode.trim().toUpperCase();
+    if (!clean) return;
+    if (clean === roomCode) {
+      setMode("preview");
+      return;
     }
+    router.push(`/r/${encodeURIComponent(clean)}`);
   };
 
   return (
@@ -184,6 +183,34 @@ export default function QrEntryAuthGate() {
               <span className="font-heading text-sm font-semibold">
                 Verifying Room #{roomCode}...
               </span>
+            </div>
+          ) : mode === "scan" ? (
+            /* Manual / Switch Code Form */
+            <div className="flex flex-col gap-4">
+              <div className="figma-card flex flex-col gap-3 rounded-2xl p-5">
+                <label className="font-heading font-bold text-sm text-on-surface">
+                  Enter Event Access Code
+                </label>
+                <form onSubmit={handleManualSubmit} className="flex flex-col gap-3">
+                  <input
+                    type="text"
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    maxLength={8}
+                    placeholder="VIBE26"
+                    className="w-full bg-surface-container-lowest rounded-xl px-4 py-3 text-center font-heading font-extrabold text-2xl tracking-widest text-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase placeholder:text-outline-variant"
+                  />
+                  <p className="font-body text-xs text-on-surface-variant text-center">
+                    Refer to venue screen or event badge credentials.
+                  </p>
+                  <button
+                    type="submit"
+                    className="w-full py-3 px-4 rounded-xl font-heading font-bold text-xs bg-primary text-on-primary shadow-md"
+                  >
+                    Switch to Room
+                  </button>
+                </form>
+              </div>
             </div>
           ) : errorMessage ? (
             <div className="flex flex-col gap-4">
@@ -283,6 +310,7 @@ export default function QrEntryAuthGate() {
               )}
 
               {/* Guest / Authenticated Identity Bar */}
+              {room.status === "open" && (
               <div className="figma-card flex flex-col gap-3 rounded-2xl p-4">
                 {!auth.isReady ? (
                   <div className="flex items-center justify-center gap-2 py-1">
@@ -342,12 +370,11 @@ export default function QrEntryAuthGate() {
                         <span>Preview as Read-Only Guest</span>
                       </button>
                     </div>
-                    {errorMessage && (
-                      <p className="text-xs text-danger font-semibold">{errorMessage}</p>
-                    )}
                   </>
                 )}
               </div>
+              )}
+              {entryError && <p role="alert" className="text-xs text-danger font-semibold">{entryError}</p>}
 
               {/* Join Wall Action Button — authenticated visitors only */}
               {auth.isAuthenticated && (
@@ -370,35 +397,7 @@ export default function QrEntryAuthGate() {
                 </button>
               )}
             </div>
-          ) : (
-            /* Manual / Switch Code Form */
-            <div className="flex flex-col gap-4">
-              <div className="figma-card flex flex-col gap-3 rounded-2xl p-5">
-                <label className="font-heading font-bold text-sm text-on-surface">
-                  Enter Event Access Code
-                </label>
-                <form onSubmit={handleManualSubmit} className="flex flex-col gap-3">
-                  <input
-                    type="text"
-                    value={manualCode}
-                    onChange={(e) => setManualCode(e.target.value)}
-                    maxLength={8}
-                    placeholder="VIBE26"
-                    className="w-full bg-surface-container-lowest rounded-xl px-4 py-3 text-center font-heading font-extrabold text-2xl tracking-widest text-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase placeholder:text-outline-variant"
-                  />
-                  <p className="font-body text-xs text-on-surface-variant text-center">
-                    Refer to venue screen or event badge credentials.
-                  </p>
-                  <button
-                    type="submit"
-                    className="w-full py-3 px-4 rounded-xl font-heading font-bold text-xs bg-primary text-on-primary shadow-md"
-                  >
-                    Switch to Room
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
+          ) : null}
         </main>
       </div>
     </ThemeWrapper>

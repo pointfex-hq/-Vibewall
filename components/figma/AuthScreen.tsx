@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getCurrentUser, signInWithGoogle } from "@/lib/supabase";
+import { authReturnPath, getCurrentUser, signInWithGoogle } from "@/lib/supabase";
 import { isMockMode } from "@/lib/config";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import { Icon } from "@/components/icons";
@@ -17,7 +17,7 @@ import { BrandMark } from "@/components/figma";
 export default function AuthScreen({ variant }: { variant: "signin" | "signup" }) {
   const router = useRouter();
   const params = useSearchParams();
-  const returnTo = params.get("returnTo") || "/";
+  const returnTo = authReturnPath(params.get("returnTo"), typeof window === "undefined" ? "http://localhost" : window.location.origin);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -80,12 +80,9 @@ export default function AuthScreen({ variant }: { variant: "signin" | "signup" }
     setBusy(true);
     setError("");
     try {
-      await signInWithGoogle(typeof window !== "undefined" ? window.location.origin + returnTo : undefined);
-      const user = await getCurrentUser();
-      if (user) router.push(returnTo);
-    } catch {
-      setError("Google sign-in failed. Please try again.");
-    } finally {
+      await signInWithGoogle(returnTo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed. Please try again.");
       setBusy(false);
     }
   };
@@ -203,7 +200,7 @@ export default function AuthScreen({ variant }: { variant: "signin" | "signup" }
           <p className="mt-5 text-center text-xs text-on-surface-variant">
             {isSignUp ? "Already have an account? " : "New to VibeWall? "}
             <Link
-              href={isSignUp ? "/signin" : "/signup"}
+              href={{ pathname: isSignUp ? "/signin" : "/signup", query: { returnTo } }}
               className="font-bold text-primary hover:underline"
             >
               {isSignUp ? "Sign In" : "Create an Account"}

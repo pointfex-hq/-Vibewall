@@ -21,46 +21,55 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: "pkce",
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false,
   },
 });
 
-export async function signInWithGoogle(
-  redirectTo?: string
-): Promise<{ data: any; error: any }> {
+export function authReturnPath(destination: string | null, origin: string): string {
+  try {
+    const url = new URL(destination || "/", origin);
+    if (url.origin === origin && !url.pathname.startsWith("//")) {
+      return url.pathname + url.search + url.hash;
+    }
+  } catch {}
+  return "/";
+}
+
+export async function signInWithGoogle(redirectTo?: string): Promise<"redirecting" | "signed-in"> {
+  if (typeof window === "undefined") throw new Error("Google sign-in requires a browser.");
+  const returnPath = authReturnPath(redirectTo || window.location.href, window.location.origin);
   if (isMockMode()) {
     // Mock login flow (explicitly enabled via NEXT_PUBLIC_USE_MOCK=true).
-    if (typeof window !== "undefined") {
-      const mockUser = {
-        id: "mock-user-jitu-" + Math.random().toString(36).substring(2, 8),
-        email: "jitu.frontend@vibewall.app",
-        user_metadata: {
-          full_name: "Jihadul Islam Jitu",
-          avatar_url: "/assets/stylized_modern_digital_vector_portrait_illustration_of_a_charismatic_south.png",
-        },
-      };
-      localStorage.removeItem("vibewall_mock_signed_out");
-      localStorage.setItem("vibewall_mock_user", JSON.stringify(mockUser));
-      if (redirectTo) {
-        window.location.href = redirectTo;
-      }
-      return { data: { user: mockUser }, error: null };
+    const mockUser = {
+      id: "mock-user-jitu-" + Math.random().toString(36).substring(2, 8),
+      email: "jitu.frontend@vibewall.app",
+      user_metadata: {
+        full_name: "Jihadul Islam Jitu",
+        avatar_url: "/assets/stylized_modern_digital_vector_portrait_illustration_of_a_charismatic_south.png",
+      },
+    };
+    localStorage.removeItem("vibewall_mock_signed_out");
+    localStorage.setItem("vibewall_mock_user", JSON.stringify(mockUser));
+    if (redirectTo) {
+      window.location.assign(returnPath);
+      return "redirecting";
     }
-    return { data: { user: null }, error: { message: "Mock sign-in is only available in the browser." } };
+    return "signed-in";
   }
 
   if (!isSupabaseConfigured()) {
-    // Never fabricate an identity when real Supabase auth is not configured.
-    return { data: { user: null }, error: { message: "Authentication is not configured." } };
+    throw new Error("Google sign-in is unavailable. This deployment needs Supabase authentication configured.");
   }
 
-  sessionStorage.setItem("vibewall_auth_return", redirectTo || window.location.href);
-  return await supabase.auth.signInWithOAuth({
+  sessionStorage.setItem("vibewall_auth_return", returnPath);
+  const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: new URL("/auth/callback", window.location.origin).href,
     },
   });
+  if (error) throw error;
+  return "redirecting";
 }
 
 export async function signOut() {
