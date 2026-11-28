@@ -12,7 +12,6 @@ import {
   PollDTO,
   RealtimeEventPayloads,
   RoomDTO,
-  StoryDTO,
   ThemeKey,
 } from "@/types/vibewall";
 import { api } from "@/lib/api";
@@ -101,7 +100,6 @@ export default function HostDashboardPage() {
     pinned_notes: [],
     notes: [],
     active_poll: null,
-    active_story: null,
   });
 
   const [activeTab, setActiveTab] = useState<
@@ -126,10 +124,6 @@ export default function HostDashboardPage() {
   const [pollOption3, setPollOption3] = useState("");
   const [pollOption4, setPollOption4] = useState("");
   const [isCreatingPoll, setIsCreatingPoll] = useState(false);
-
-  // Story creation form
-  const [storyPrompt, setStoryPrompt] = useState("");
-  const [isCreatingStory, setIsCreatingStory] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -220,7 +214,7 @@ export default function HostDashboardPage() {
 
   // Moderation Actions
   const handleModerate = async (
-    targetType: "post" | "note" | "story_entry",
+    targetType: "post" | "note",
     targetId: string,
     action: "pin" | "unpin" | "hide" | "restore" | "delete"
   ) => {
@@ -314,24 +308,6 @@ export default function HostDashboardPage() {
       alert(err.message || "Failed to create poll");
     } finally {
       setIsCreatingPoll(false);
-    }
-  };
-
-  // Chain Story Creation
-  const handleCreateStory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!storyPrompt.trim()) return;
-
-    setIsCreatingStory(true);
-    try {
-      const res = await api.createStory(roomCode, storyPrompt.trim());
-      setFeed((prev) => ({ ...prev, active_story: res.story }));
-      setStoryPrompt("");
-      showToast("New Chain Story prompt launched!");
-    } catch (err: any) {
-      alert(err.message || "Failed to launch story");
-    } finally {
-      setIsCreatingStory(false);
     }
   };
 
@@ -447,7 +423,7 @@ export default function HostDashboardPage() {
             {[
               { id: "moderation", label: "Content Moderation", icon: "shield" },
               { id: "themes", label: "Theme & Frames", icon: "palette" },
-              { id: "engagement", label: "Polls & Stories", icon: "poll" },
+              { id: "engagement", label: "Polls & Engagement", icon: "poll" },
               { id: "settings", label: "Room Management", icon: "settings" },
             ].map((tab) => (
               <button
@@ -697,7 +673,7 @@ export default function HostDashboardPage() {
             </div>
           )}
 
-          {/* TAB 3: Polls & Stories */}
+          {/* TAB 3: Polls & Engagement */}
           {activeTab === "engagement" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Create Poll */}
@@ -767,35 +743,6 @@ export default function HostDashboardPage() {
                 </form>
               </div>
 
-              {/* Create Chain Story */}
-              <div className="p-5 rounded-2xl bg-surface-container border border-outline/50 flex flex-col gap-4">
-                <div className="flex items-center gap-2">
-                  <Icon name="auto_stories" size={20} className="text-secondary" />
-                  <h3 className="font-heading font-bold text-base text-on-surface">
-                    Create Chain Story Prompt
-                  </h3>
-                </div>
-
-                <form onSubmit={handleCreateStory} className="flex flex-col gap-3">
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder="Story Prompt (e.g. Capture your crew at the food stall 🍕)"
-                    value={storyPrompt}
-                    onChange={(e) => setStoryPrompt(e.target.value)}
-                    maxLength={280}
-                    className="w-full p-3 rounded-xl bg-surface-container-lowest border border-outline/50 text-xs text-on-surface focus:outline-none focus:border-primary resize-none"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={isCreatingStory}
-                    className="w-full py-2.5 rounded-xl bg-secondary text-white font-heading font-bold text-xs shadow-md hover:brightness-110 active:scale-95"
-                  >
-                    {isCreatingStory ? "Starting Story..." : "Launch Chain Story"}
-                  </button>
-                </form>
-              </div>
             </div>
           )}
 

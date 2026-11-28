@@ -164,9 +164,9 @@ async function runUITests() {
     // duplicate-vote assertions run after the authenticated vote below.
     const arijitOption = page.locator("button:has-text('Arijit Singh')").first();
 
-    // Verify Chain Story Strip
-    const storyStrip = await page.locator("text=CHAIN STORY").isVisible();
-    logResult("Chain Story Strip Rendered", storyStrip);
+    // Verify the Chain Story feature is fully absent from the wall.
+    const chainStoryPresent = await page.locator("text=CHAIN STORY").first().isVisible().catch(() => false);
+    logResult("Chain Story UI Absent", !chainStoryPresent);
 
     // Verify Pinned Note
     const pinnedNote = await page.locator("text=Pinned Vibe Note").first().isVisible();
@@ -254,49 +254,7 @@ async function runUITests() {
       logResult("Poll Vote While Authenticated Skips Auth Modal", !(await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible()));
     }
 
-    // Chain Story — StoryStrip → Add Photo uploads to the active story (not the feed)
-    const getStoryId = () =>
-      page.evaluate(() => {
-        const store = globalThis[Symbol.for("vibewall.mock.store")];
-        const story = [...(store?.stories?.values() || [])].find((s) => s.is_active);
-        return story ? story.id : null;
-      });
-    const getStoryEntries = (sid) =>
-      page.evaluate((storyId) => {
-        const store = globalThis[Symbol.for("vibewall.mock.store")];
-        const story = [...(store?.stories?.values() || [])].find((s) => s.id === storyId);
-        return story ? story.entries.length : -1;
-      }, sid);
     const getPostCount = () => page.evaluate(() => globalThis[Symbol.for("vibewall.mock.store")]?.posts?.size || 0);
-
-    const storyId = await getStoryId();
-    const storyEntriesBefore = storyId ? await getStoryEntries(storyId) : -1;
-    const postsBeforeStoryUpload = await getPostCount();
-
-    const addPhotoBtn = page.locator("text=Add Photo").first();
-    if (storyId && (await addPhotoBtn.isVisible())) {
-      await addPhotoBtn.click();
-      await page.waitForTimeout(1000);
-      logResult("Story Add Photo Opens Composer", await page.locator("text=Add to Chain Story").isVisible());
-      logResult("Story Entry Mode Hides Frame Selector", !(await page.locator("text=Choose Frame Style").isVisible()));
-      const png = await page.evaluate(() => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1;
-        canvas.height = 1;
-        return canvas.toDataURL("image/png");
-      });
-      await page.setInputFiles("input[type=file]", {
-        name: "story-photo.png",
-        mimeType: "image/png",
-        buffer: Buffer.from(png.split(",")[1], "base64"),
-      });
-      await page.locator("img[alt='Upload preview']").waitFor({ state: "visible", timeout: 8000 });
-      await page.click("button:has-text('Add to Chain Story')");
-      await page.waitForTimeout(1500);
-      const storyEntriesAfter = await getStoryEntries(storyId);
-      logResult("Story Upload Adds Entry To Chain Story", storyEntriesAfter === storyEntriesBefore + 1, `before=${storyEntriesBefore} after=${storyEntriesAfter}`);
-      logResult("Story Upload Does Not Post To Feed", (await getPostCount()) === postsBeforeStoryUpload);
-    }
 
     // Standard Add Photo (bottom bar) still posts to the feed via api.createPost
     const postsBeforeStandard = await getPostCount();
@@ -322,41 +280,15 @@ async function runUITests() {
 
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "3-live-wall-full.png") });
 
-    // ----------------------------------------------------
-    // TEST SUITE 4: Route /r/[code]/story/[storyId] (Story Viewer)
-    // ----------------------------------------------------
-    console.log("\n>>> Testing Route 4: Chain Story Viewer (/r/VIBE26/story/story-fest-1)");
+    // Former Chain Story URL must return the global not-found experience.
     await page.goto(`${BASE_URL}/r/VIBE26/story/story-fest-1`, { waitUntil: "domcontentloaded" });
-    // Wait for the story stage to finish loading.
-    await page.waitForFunction(
-      () => document.body.innerText.includes("Add Your Photo to this Chain Story"),
-      null,
-      { timeout: 8000 }
-    );
-
-    // Verify 9:16 Fullscreen Immersive Stage
-    const authorHeader = await page.locator("span:has-text('Murad FestCrew'), span:has-text('FestCrew'), span:has-text('Fest')").first().isVisible();
-    logResult("Story Author Header Telemetry", authorHeader);
-
-    // Verify Segmented Progress Bar
-    const progressBars = await page.locator("div.h-full.bg-primary.rounded-full").count();
-    logResult("Multi-segment Progress Bars", progressBars >= 1, `${progressBars} segments`);
-
-    // Verify Add Photo CTA
-    const addPhotoCTA = await page.locator("button:has-text('Add Your Photo')").isVisible();
-    logResult("Add Photo to Story CTA Visible", addPhotoCTA);
-
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "4-chain-story-viewer.png") });
-
-    // Close Story -> return to wall
-    await page.click("a[href*='/r/VIBE26/wall']");
-    await page.waitForURL("**/r/VIBE26/wall", { timeout: 8000 });
-    logResult("Story Close Returns to Live Wall", page.url().includes("/r/VIBE26/wall"));
+    await page.waitForTimeout(500);
+    logResult("Removed Story Route Returns 404", (await page.locator("body").innerText()).includes("404 - Not Found"));
 
     // ----------------------------------------------------
-    // TEST SUITE 5: Route /host/[code] (Host Admin Dashboard)
+    // TEST SUITE 4: Route /host/[code] (Host Admin Dashboard)
     // ----------------------------------------------------
-    console.log("\n>>> Testing Route 5: Host Admin Dashboard (/host/VIBE26)");
+    console.log("\n>>> Testing Route 4: Host Admin Dashboard (/host/VIBE26)");
     await page.goto(`${BASE_URL}/host/VIBE26`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(800);
 
@@ -385,10 +317,10 @@ async function runUITests() {
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "5-host-themes-tab.png") });
 
     // Test Engagement Tab (Polls & Stories)
-    await page.click("button:has-text('Polls & Stories')");
+    await page.click("button:has-text('Polls & Engagement')");
     await page.waitForTimeout(400);
     const engagementForm = await page.locator("h3:has-text('Launch Interactive Poll')").isVisible();
-    logResult("Engagement Management Panel (Polls & Stories)", engagementForm);
+    logResult("Engagement Management Panel (Polls & Engagement)", engagementForm);
 
     // Test Room Management Tab (QR code & security)
     await page.click("button:has-text('Room Management')");
@@ -399,9 +331,9 @@ async function runUITests() {
     await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "5-host-dashboard-full.png") });
 
     // ----------------------------------------------------
-    // TEST SUITE 6: Route /screen/[token] (Venue Display 16:9)
+    // TEST SUITE 5: Route /screen/[token] (Venue Display 16:9)
     // ----------------------------------------------------
-    console.log("\n>>> Testing Route 6: Venue Display 16:9 (/screen/screen_token_vibe26_live)");
+    console.log("\n>>> Testing Route 5: Venue Display 16:9 (/screen/screen_token_vibe26_live)");
     const tvPage = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     await tvPage.goto(`${BASE_URL}/screen/screen_token_vibe26_live`, { waitUntil: "domcontentloaded" });
     await tvPage.waitForTimeout(800);
@@ -424,7 +356,7 @@ async function runUITests() {
     await tvPage.screenshot({ path: path.join(SCREENSHOTS_DIR, "6-venue-display-1080p.png") });
 
     // ----------------------------------------------------
-    // TEST SUITE 7: Responsive Mobile Testing (390px Viewport)
+    // TEST SUITE 6: Responsive Mobile Testing (390px Viewport)
     // ----------------------------------------------------
     console.log("\n>>> Testing Responsive Layout: Mobile iPhone 14/15 Viewport (390px)");
     const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });

@@ -21,7 +21,6 @@ const ICON_MAP: Record<string, keyof typeof lucide> = {
   arrow_back: "ArrowLeft",
   arrow_forward: "ArrowRight",
   auto_awesome: "Sparkles",
-  auto_stories: "BookMarked",
   badge: "Badge",
   calendar_event: "CalendarDays",
   block: "Ban",

@@ -12,7 +12,7 @@ This branch implements the 16 REST contracts in section 8 of the Team Hydrogen p
 
 ## Direct upload
 
-Send the documented JSON body to `POST /api/cloudinary/sign`. The JSON response has the four fields in section 8. Parse the same-origin response header `X-VibeWall-Upload-Params` as JSON and append every entry to the Cloudinary upload form, alongside the file, signature and API key. The signed public ID binds the resulting asset to its uploader. The signed preset and overwrite flag apply the project restrictions. Submit the returned secure URL and full public ID through the post or story-entry endpoint.
+Send the documented JSON body to `POST /api/cloudinary/sign`. The JSON response has the four fields in section 8. Parse the same-origin response header `X-VibeWall-Upload-Params` as JSON and append every entry to the Cloudinary upload form, alongside the file, signature and API key. The signed public ID binds the resulting asset to its uploader. The signed preset and overwrite flag apply the project restrictions. Submit the returned secure URL and full public ID through the post endpoint.
 
 ## Verification
 
