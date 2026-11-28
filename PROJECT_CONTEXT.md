@@ -8,11 +8,15 @@
 
 ---
 
+> **CURRENT STATUS — 28 Nov 2026:** Chain Story has been **removed from the frontend** (see section 37). All earlier sections describing Chain Story as active are kept as historical traceability only and are superseded by section 36. The backend Story tables/endpoints remain untouched pending separate backend-lead approval.
+
+---
+
 ## 1. Project Overview
 
 VibeWall is an interactive, QR-based live social wall engineered for university festivals, hackathons, concerts, and campus hangout venues.
 
-Participants scan a venue QR code from a mobile device to open a room's gate. Visitors may preview the room without signing in, but Google authentication (Supabase OAuth) is mandatory before any interactive or write operation: joining the live wall, publishing photos, posting Vibe Notes, liking, voting in polls, and creating or contributing to Chain Stories.
+Participants scan a venue QR code from a mobile device to open a room's gate. Visitors may preview the room without signing in, but Google authentication (Supabase OAuth) is mandatory before any interactive or write operation: joining the live wall, publishing photos, posting Vibe Notes, liking, and voting in polls.
 
 Hosts manage the event via an administrative dashboard:
 - Moderating submissions (approving, hiding, pinning top notes, permanently deleting with Cloudinary media purge).
@@ -953,7 +957,7 @@ Implemented the Figma design "Untitled" (`F2WT9hLyMtmyM8a57gQl9G`, node 0-1) on 
 
 - Landing (`app/page.tsx`): illustrated brand tile, hero "Turn Every Event Into A Living Memory Wall", Create an Event / Explore Live Walls CTAs, real quick-join, tilted memory-quilt polaroids using local assets, real active-room cards, interactive six-theme selector, and How It Works steps.
 - Entry gate (`app/r/[code]/page.tsx`): paper-card event banner, status pill, guest notice and Google/preview CTAs restyled to the Figma palette and radii.
-- Wall (`app/r/[code]/wall/page.tsx`): paper hero, warm quota/poll/story cards, `#chain-story` and `#poll` anchors, Figma mobile bottom navigation (`components/figma/index.tsx`) with real links; floating composer lifted above the nav.
+- Wall (`app/r/[code]/wall/page.tsx`): paper hero, warm quota and poll cards, a `#poll` anchor, Figma mobile bottom navigation (`components/figma/index.tsx`) with real links; floating composer lifted above the nav.
 - Cards: `components/PhotoCard.tsx` now renders polaroid framing, tape and hashtag pill; `components/NoteCard.tsx` renders Figma mustard note cards (pinned = rose paper).
 - Host dashboard (`app/host/[code]/page.tsx`): circular-stat telemetry cards, pill tabs, Figma moderation queue cards with hashtag/time pills and paper note cards.
 - Venue display: stage background moved to Figma "Shanta After Dark" burgundy.
@@ -965,7 +969,7 @@ Implemented the Figma design "Untitled" (`F2WT9hLyMtmyM8a57gQl9G`, node 0-1) on 
 
 ### 36.5 Functional integration preserved
 
-No route, API contract, auth flow, upload/compression path, realtime subscription or moderation action was removed. All test-visible labels and roles were preserved (including `Live Social Wall`, `Create New Room`, `Create the First Room`, entry CTAs, quota/poll/story assertions, VibeCard export, and host tab labels).
+No route, API contract, auth flow, upload/compression path, realtime subscription or moderation action was removed. All test-visible labels and roles were preserved (including `Live Social Wall`, `Create New Room`, `Create the First Room`, entry CTAs, quota/poll assertions, VibeCard export, and host tab labels).
 
 ### 36.6 Validation
 
@@ -987,3 +991,54 @@ Screenshots: `figma-implementation/*.png`.
 - No new runtime dependencies were added.
 
 Remaining issues: none for this implementation.
+
+## 37. Complete Chain Story Frontend Feature Removal (`feat/remove-chain-story`)
+
+### 37.1 Reason
+
+Approved product decision supersedes issue #25: Chain Story is no longer part of the VibeWall frontend. This is a full feature removal — not a hidden button or disabled route — carried out on the dedicated `feat/remove-chain-story` branch based on `feat/frontend-ui`.
+
+### 37.2 Removed routes and components
+
+- Route/page `app/r/[code]/story/[storyId]/page.tsx` (and its directory chain). Direct visits now render the global `404 - Not Found` page.
+- `components/StoryStrip.tsx` (reel, Add Photo entry point, progress rings).
+- `tests/screenshots/4-chain-story-viewer.png` fixture.
+- Host "Polls & Stories" tab renamed to "Polls & Engagement"; Chain Story prompt creation form/state/handler removed.
+- Auth modal copy no longer advertises Chain Stories; root metadata no longer mentions them; unused `auto_stories` icon and `storyTimer` keyframes removed.
+
+### 37.3 API, state, data and realtime cleanup
+
+- `lib/api.ts`: removed `createStory` / `addStoryEntry` and their DTO imports; moderation/report unions no longer include `story_entry`.
+- `app/api/[...path]/route.ts`: removed the mock frontend Story creation and entry proxy endpoints.
+- `lib/mock-data.ts`: removed `StoryDTO` import, the `stories` store map, seeded story and entries, `active_story` in feeds, `createStory` / `addStoryEntry`, story clearing, and story report/moderation branches.
+- `types/vibewall.ts`: removed `StoryDTO`, `StoryEntryDTO`, `FeedResponse.active_story`, and `story_entry` from moderation/realtime unions.
+- `components/ComposerModal.tsx`: removed `story-entry` mode, `storyId` prop, conditional frame hiding, story submit labels/branching; standard upload, compression, preview, frame selection, cooldown and error handling are unchanged.
+- `app/r/[code]/wall/page.tsx`: removed story state, story upload routing, and StoryStrip rendering; wall photo creation still uses `api.uploadPhoto` + `api.createPost`.
+- Tests: removed story upload and viewer suites, added explicit "Chain Story UI Absent" and "Removed Story Route Returns 404" assertions; regression mock store no longer seeds `stories`.
+
+### 37.4 Preserved functionality
+
+General photo upload, Cloudinary signing/upload, validation & compression, preview, frame selection, progress/error handling, wall feed, likes, polls, notes, guest access, Google auth, Supabase realtime, QR room navigation, and responsive layouts all remain intact. No shared utility was removed solely because Chain Story used it.
+
+### 37.5 Backend intentionally untouched
+
+`server/api.mjs`, `server/feed.mjs`, `supabase/migrations/202611210001_wall.sql` and `test/api.test.mjs` still contain Story tables/endpoints/tests. These are shared backend contracts and require explicit backend-lead approval before cleanup; they are not reachable from the frontend after this change.
+
+### 37.6 Remaining references
+
+Only intentional removal records remain in active frontend source: two e2e assertions verifying absence and 404 behavior, plus this documentation entry (and earlier historical sections, retained for traceability). The untracked audit report under `code/` is an archived historical document.
+
+### 37.7 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors after clearing stale `.next` types).
+- `npm run build` → PASSED.
+- `node tests/e2e-ui-test.mjs` → 47/47 PASS (includes "Chain Story UI Absent" and "Removed Story Route Returns 404"; Figma UI assertions retained).
+- `BASE_URL=http://localhost:3000 node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+- `node verify-mock-api-errors.mjs` → 23/23 PASS.
+- `npm test` → PASSED (backend DB test skipped without a disposable database).
+- `npm run lint` → unavailable (`next lint` deprecated, prompts for interactive ESLint setup).
+- Responsive sweep at 390/430/768/1024/1280 px → zero horizontal overflow.
+
+This section was merged together with section 36 (Figma UI implementation): the Figma visual system is retained while all Chain Story UI/API/state remains removed.
+
+Remaining issues: none known.

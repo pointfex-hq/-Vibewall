@@ -172,12 +172,11 @@ export function FigmaBottomNav({
 }: {
   code: string;
   host?: boolean;
-  active?: "feed" | "polls" | "story" | "host";
+  active?: "feed" | "polls" | "host";
 }) {
   const items = [
     { key: "feed" as const, label: "Feed", href: `/r/${code}/wall`, icon: "grid_view" },
     { key: "polls" as const, label: "Polls", href: `/r/${code}/wall#poll`, icon: "how_to_vote" },
-    { key: "story" as const, label: "Story", href: `/r/${code}/wall#chain-story`, icon: "auto_stories" },
     { key: "host" as const, label: host ? "Host" : "Portal", href: host ? `/host/${code}` : "/", icon: "person" },
   ];
   return (

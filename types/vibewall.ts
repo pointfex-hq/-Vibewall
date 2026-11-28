@@ -55,27 +55,11 @@ export interface PollDTO {
   options: PollOptionDTO[];
 }
 
-export interface StoryEntryDTO {
-  id: string;
-  image_url: string;
-  author_name: string;
-  sequence_order: number;
-  created_at: string;
-}
-
-export interface StoryDTO {
-  id: string;
-  prompt: string;
-  is_active: boolean;
-  entries: StoryEntryDTO[];
-}
-
 export interface FeedResponse {
   posts: PostDTO[];
   pinned_notes: NoteDTO[];
   notes: NoteDTO[];
   active_poll: PollDTO | null;
-  active_story?: StoryDTO | null;
 }
 
 export interface ScreenResponse extends FeedResponse {
@@ -115,7 +99,7 @@ export interface SignResponse {
 
 export interface ModerationActionPayload {
   room_id: string;
-  target_type: "post" | "note" | "story_entry";
+  target_type: "post" | "note";
   target_id: string;
   action: "pin" | "unpin" | "hide" | "restore" | "delete";
 }
@@ -129,7 +113,7 @@ export interface RealtimeEventPayloads {
   new_post: { post: PostDTO };
   new_note: { note: NoteDTO };
   content_moderated: {
-    target_type: "post" | "note" | "story_entry";
+    target_type: "post" | "note";
     target_id: string;
     action: "pin" | "unpin" | "hide" | "restore" | "delete";
   };
