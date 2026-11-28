@@ -9,7 +9,9 @@ import { api } from "@/lib/api";
 import { getAuthState, signInWithGoogle } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import ErrorState from "@/components/ErrorState";
 import { Icon } from "@/components/icons";
+import { BrandMark } from "@/components/figma";
 
 export default function QrEntryAuthGate() {
   const params = useParams();
@@ -23,6 +25,11 @@ export default function QrEntryAuthGate() {
   const [isJoining, setIsJoining] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorInfo, setErrorInfo] = useState<{
+    status?: number;
+    code?: string;
+    isNetwork?: boolean;
+  } | null>(null);
   const [manualCode, setManualCode] = useState(roomCode);
 
   // Duplicate-join guards
@@ -33,11 +40,17 @@ export default function QrEntryAuthGate() {
     async function loadData() {
       setIsLoading(true);
       setErrorMessage("");
+      setErrorInfo(null);
       try {
         const res = await api.getRoomPreview(roomCode);
         setRoom(res.room);
       } catch (err: any) {
         setErrorMessage(err.message || "Unable to find or verify this room.");
+        setErrorInfo({
+          status: err?.status,
+          code: err?.code,
+          isNetwork: Boolean(err?.isNetwork),
+        });
       } finally {
         setIsLoading(false);
       }
@@ -119,15 +132,12 @@ export default function QrEntryAuthGate() {
 
   return (
     <ThemeWrapper themeKey={room?.theme || "midnight-neon"}>
-      <div className="flex flex-col min-h-screen bg-surface text-on-surface">
+      <div className="figma-paper flex min-h-screen flex-col text-on-surface">
         {/* Top Header */}
-        <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
-          <div className="max-w-md mx-auto h-16 px-4 flex items-center justify-between">
-            <Link
-              href="/"
-              className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors"
-            >
-              <Icon name="arrow_back" size={24} />
+        <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-md items-center justify-between px-4">
+            <Link href="/" aria-label="Back to home" className="transition-transform hover:scale-105">
+              <BrandMark size={38} />
             </Link>
             <div className="flex flex-col items-center">
               <span className="font-heading font-extrabold text-sm tracking-wider uppercase text-primary">
@@ -143,7 +153,7 @@ export default function QrEntryAuthGate() {
 
         <main className="flex-1 max-w-md mx-auto w-full px-4 py-6 flex flex-col gap-5">
           {/* Mode Switch Tabs */}
-          <div className="grid grid-cols-2 bg-surface-container-lowest p-1 rounded-full shadow-inner border border-outline/30">
+          <div className="grid grid-cols-2 rounded-full border border-outline/60 bg-surface-container-low p-1 shadow-figma">
             <button
               onClick={() => setMode("preview")}
               className={`py-2 rounded-full font-heading font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
@@ -176,15 +186,21 @@ export default function QrEntryAuthGate() {
               </span>
             </div>
           ) : errorMessage ? (
-            <div className="rounded-2xl bg-danger/10 border border-danger/30 p-6 flex flex-col items-center text-center gap-3">
-              <Icon name="warning" size={40} className="text-danger" />
-              <h2 className="font-heading font-bold text-lg text-danger">
-                Room Not Found
-              </h2>
-              <p className="font-body text-xs text-on-surface-variant">
-                {errorMessage}
-              </p>
-              <form onSubmit={handleManualSubmit} className="w-full mt-2 flex gap-2">
+            <div className="flex flex-col gap-4">
+              <ErrorState
+                status={errorInfo?.status}
+                code={errorInfo?.code}
+                message={errorMessage}
+                isNetwork={errorInfo?.isNetwork}
+                roomCode={roomCode}
+                onRetry={() => {
+                  if (typeof window !== "undefined") window.location.reload();
+                }}
+                backHref="/"
+                backLabel="Back to Home"
+                showHomeButton
+              />
+              <form onSubmit={handleManualSubmit} className="w-full flex gap-2">
                 <input
                   type="text"
                   placeholder="Enter 6-char code"
@@ -204,7 +220,7 @@ export default function QrEntryAuthGate() {
           ) : room && mode === "preview" ? (
             <div className="flex flex-col gap-4">
               {/* Event Card Banner */}
-              <div className="relative rounded-2xl overflow-hidden bg-surface-container border border-outline shadow-2xl">
+              <div className="figma-card relative overflow-hidden rounded-3xl">
                 <div className="relative h-44 w-full">
                   <Image
                     src="/assets/dynamic_university_music_festival_crowd_at_night_with_purple_and_violet_neon.png"
@@ -212,13 +228,13 @@ export default function QrEntryAuthGate() {
                     fill
                     className="object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-surface-container via-surface-container/60 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#3B2929] via-[#3B2929]/55 to-transparent" />
                   <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-tertiary"></span>
                     </span>
-                    <span className="font-heading font-bold text-[11px] text-tertiary uppercase tracking-wider">
+                    <span className="font-heading text-[11px] font-extrabold uppercase tracking-wider text-[#F2D9D1]">
                       Status: {room.status}
                     </span>
                   </div>
@@ -227,7 +243,7 @@ export default function QrEntryAuthGate() {
                   </div>
                 </div>
 
-                <div className="p-4 flex flex-col gap-2">
+                <div className="flex flex-col gap-2 p-4">
                   <span className="font-body text-xs text-primary font-bold tracking-wider uppercase">
                     Live Event Social Wall
                   </span>
@@ -255,7 +271,7 @@ export default function QrEntryAuthGate() {
 
               {/* Guest read-only notice */}
               {!auth.isAuthenticated && room.status === "open" && (
-                <div className="p-3.5 rounded-2xl bg-surface-container-low border border-primary/25 text-center text-xs font-semibold text-on-surface-variant space-y-1">
+                <div className="figma-card space-y-1 rounded-2xl bg-card-low p-3.5 text-center text-xs font-semibold text-on-surface-variant">
                   <p className="font-heading font-bold text-on-surface">
                     Viewing as a guest
                   </p>
@@ -267,7 +283,7 @@ export default function QrEntryAuthGate() {
               )}
 
               {/* Guest / Authenticated Identity Bar */}
-              <div className="p-4 rounded-2xl bg-surface-container-low border border-outline/40 flex flex-col gap-3">
+              <div className="figma-card flex flex-col gap-3 rounded-2xl p-4">
                 {!auth.isReady ? (
                   <div className="flex items-center justify-center gap-2 py-1">
                     <Icon name="progress_activity" size={18} className="animate-spin text-primary" />
@@ -309,7 +325,7 @@ export default function QrEntryAuthGate() {
                       <button
                         onClick={handleGoogleSignIn}
                         disabled={isGoogleLoading}
-                        className="flex-1 py-2.5 px-4 rounded-xl font-heading font-bold text-xs bg-primary text-on-primary shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="figma-primary-btn flex-1 px-4 py-2.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isGoogleLoading ? (
                           <Icon name="progress_activity" size={18} className="animate-spin" />
@@ -320,7 +336,7 @@ export default function QrEntryAuthGate() {
                       </button>
                       <button
                         onClick={() => setMode("preview")}
-                        className="flex-1 py-2.5 px-4 rounded-xl font-heading font-bold text-xs bg-surface-container-high border border-outline/50 text-on-surface flex items-center justify-center gap-2 hover:border-primary/40 transition-colors"
+                        className="figma-card flex-1 px-4 py-2.5 text-xs font-bold text-on-surface transition-colors hover:border-primary/60"
                       >
                         <Icon name="visibility" size={18} />
                         <span>Preview as Read-Only Guest</span>
@@ -338,7 +354,7 @@ export default function QrEntryAuthGate() {
                 <button
                   onClick={handleJoin}
                   disabled={isJoining || room.status !== "open"}
-                  className="w-full py-3.5 px-4 rounded-2xl font-heading font-bold text-sm bg-primary text-on-primary shadow-[0_0_24px_rgba(139,92,246,0.4)] hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
+                  className="figma-primary-btn mt-2 w-full px-4 py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isJoining ? (
                     <>
@@ -357,7 +373,7 @@ export default function QrEntryAuthGate() {
           ) : (
             /* Manual / Switch Code Form */
             <div className="flex flex-col gap-4">
-              <div className="rounded-2xl bg-surface-container border border-outline p-5 shadow-xl flex flex-col gap-3">
+              <div className="figma-card flex flex-col gap-3 rounded-2xl p-5">
                 <label className="font-heading font-bold text-sm text-on-surface">
                   Enter Event Access Code
                 </label>

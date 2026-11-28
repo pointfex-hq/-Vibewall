@@ -13,6 +13,7 @@ async function runUITests() {
 
   const browser = await chromium.launch({
     headless: true,
+    executablePath: "/home/jitu/.cache/ms-playwright/chromium-1254/chrome-linux64/chrome",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
@@ -116,14 +117,15 @@ async function runUITests() {
     await page.waitForTimeout(1200);
     const mockUserAfterSignOut = await page.evaluate(() => localStorage.getItem("vibewall_mock_user"));
     logResult("Mock Sign-Out Clears Mock User", mockUserAfterSignOut === null);
-    const hostSignInBtn = page.locator("button:has-text('Host Sign In')");
-    logResult("Mock Sign-Out Returns to Signed-Out State", await hostSignInBtn.isVisible());
+    // main renamed the signed-out landing CTA to "Continue with Google".
+    const signedOutBtn = page.locator("button:has-text('Host Sign In'), button:has-text('Continue with Google')").first();
+    logResult("Mock Sign-Out Returns to Signed-Out State", await signedOutBtn.isVisible());
 
     // Refresh after sign-out must keep the user signed out (no auto re-login).
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
-    const hostSignInAfterRefresh = page.locator("button:has-text('Host Sign In')");
-    logResult("Mock Sign-Out Persists After Refresh", await hostSignInAfterRefresh.isVisible());
+    const signedOutAfterRefresh = page.locator("button:has-text('Host Sign In'), button:has-text('Continue with Google')").first();
+    logResult("Mock Sign-Out Persists After Refresh", await signedOutAfterRefresh.isVisible());
     const mockUserAfterRefresh = await page.evaluate(() => localStorage.getItem("vibewall_mock_user"));
     logResult("Mock State Cleared After Refresh", mockUserAfterRefresh === null);
 
@@ -145,6 +147,10 @@ async function runUITests() {
     const headerTitle = await page.textContent("h1");
     logResult("Wall Event Header Title", headerTitle.includes("Dynamic University Fest 2026"));
 
+    // Verify Photo Quota Meter
+    const quotaMeter = await page.locator("text=/[0-9]+ \\/ 15/").first().isVisible();
+    logResult("Photo Quota Meter Rendered", quotaMeter);
+
     // Copy Code Button
     const copyBtn = page.locator("button:has-text('#VIBE26')");
     await copyBtn.click();
@@ -154,14 +160,9 @@ async function runUITests() {
     const pollVisible = await page.locator("h2:has-text('Which artist do you want')").isVisible();
     logResult("Interactive Poll Card Rendered", pollVisible);
 
-    // Verify Poll and Duplicate Vote Prevention
-    const arijitOption = page.locator("button:has-text('Arijit Singh')");
-    if (await arijitOption.isVisible()) {
-      const isDisabled = await arijitOption.isDisabled();
-      logResult("Poll Duplicate Vote Prevention (Disabled state)", isDisabled);
-      const voteRecorded = await page.locator("text=Your vote is recorded in real time").isVisible();
-      logResult("Poll Voted Status Feedback Displayed", voteRecorded);
-    }
+    // The poll starts open for a fresh voter. main tracks votes per voter, so
+    // duplicate-vote assertions run after the authenticated vote below.
+    const arijitOption = page.locator("button:has-text('Arijit Singh')").first();
 
     // Verify Chain Story Strip
     const storyStrip = await page.locator("text=CHAIN STORY").isVisible();
@@ -172,14 +173,14 @@ async function runUITests() {
     logResult("Pinned Vibe Note Highlighted at Top", pinnedNote);
 
     // Guest Poll Vote — click shows the auth modal (shared guard with the like flow)
-    const pollOption = page.locator("button:has-text('Arijit Singh')").first();
-    if (await pollOption.isVisible() && !(await pollOption.isDisabled())) {
-      await pollOption.click();
+    if (await arijitOption.isVisible() && !(await arijitOption.isDisabled())) {
+      await arijitOption.click();
       await page.waitForTimeout(300);
       const guestPollModal = await page.locator('[role="dialog"]:has-text("Sign in to Join the Vibe")').isVisible();
       logResult("Guest Poll Vote Click Shows Auth Modal", guestPollModal);
-      await page.click("button:has-text('Continue with Google')");
-      await page.waitForTimeout(800);
+      // Keep the next interaction guest-only.
+      await page.click("button:has-text('Continue Browsing as Guest')");
+      await page.waitForTimeout(200);
     }
 
     // Test Photo Card Like interaction — guest gets the auth modal, then signs in
@@ -203,6 +204,16 @@ async function runUITests() {
       await page.waitForTimeout(400);
       const updatedLikeText = await firstLikeBtn.textContent();
       logResult("Like Works After Google Sign-In", afterSignInText !== updatedLikeText, `${afterSignInText?.trim()} -> ${updatedLikeText?.trim()}`);
+    }
+
+    // Authenticated poll vote — now verify duplicate prevention and feedback.
+    if (await arijitOption.isVisible()) {
+      if (!(await arijitOption.isDisabled())) {
+        await arijitOption.click();
+        await page.waitForTimeout(600);
+      }
+      logResult("Poll Duplicate Vote Prevention (Disabled state)", await arijitOption.isDisabled());
+      logResult("Poll Voted Status Feedback Displayed", await page.locator("text=Your vote is recorded in real time").isVisible());
     }
 
     // Test VibeCard Exporter Modal

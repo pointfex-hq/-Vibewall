@@ -8,6 +8,7 @@ import { ScreenResponse, RoomDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
 import { subscribeToRoom } from "@/lib/supabase";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import ErrorState from "@/components/ErrorState";
 import { Icon } from "@/components/icons";
 
 export default function VenueDisplayPage() {
@@ -18,14 +19,19 @@ export default function VenueDisplayPage() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState("");
-  const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<{
+    status?: number;
+    code?: string;
+    message?: string;
+    isNetwork?: boolean;
+  } | null>(null);
 
   // Load initial screen data
   useEffect(() => {
     async function loadScreen() {
       setIsLoading(true);
-      setLoadError("");
+      setLoadError(null);
       try {
         const data = await api.getScreenData(screenToken);
         setScreenData(data);
@@ -34,8 +40,14 @@ export default function VenueDisplayPage() {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
         const qr = await roomQrDataUrl(origin, data.room.code, 380);
         setQrCodeDataUrl(qr);
-      } catch (err) {
-        setLoadError(err instanceof Error ? err.message : "Venue display unavailable");
+      } catch (err: any) {
+        console.error("Venue screen load failed:", err);
+        setLoadError({
+          status: err?.status,
+          code: err?.code,
+          message: err?.message,
+          isNetwork: Boolean(err?.isNetwork),
+        });
       } finally {
         setIsLoading(false);
       }
@@ -48,7 +60,7 @@ export default function VenueDisplayPage() {
     if (!screenData?.room?.id) return;
 
     const unsubscribe = subscribeToRoom(screenData.room.id, {
-      onRoomClosed: () => setLoadError("Room is closed"),
+      onRoomClosed: () => setLoadError({ message: "Room is closed" }),
       onNewPost: ({ post }) => {
         setScreenData((prev) =>
           prev
@@ -168,10 +180,30 @@ export default function VenueDisplayPage() {
     }
   };
 
-  if (loadError) return <main role="alert" className="p-8">{loadError}. Ask the host for the current projector link.</main>;
+  if (loadError) {
+    return (
+      <div className="fixed inset-0 bg-[#2A1118] text-[#FFF8F5] flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <ErrorState
+            status={loadError.status}
+            code={loadError.code}
+            message={loadError.message || "Invalid screen token. Please check the projector link."}
+            isNetwork={loadError.isNetwork}
+            onRetry={() => {
+              if (typeof window !== "undefined") window.location.reload();
+            }}
+            backHref="/"
+            backLabel="Back to Home"
+            showHomeButton
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading || !screenData) {
     return (
-      <div className="fixed inset-0 bg-[#09090B] text-white flex flex-col items-center justify-center gap-3">
+      <div className="fixed inset-0 bg-[#2A1118] text-[#FFF8F5] flex flex-col items-center justify-center gap-3">
         <Icon name="progress_activity" size={48} className="animate-spin text-primary" />
         <span className="font-heading font-extrabold text-xl tracking-wider">
           Connecting Venue Display...
@@ -191,7 +223,7 @@ export default function VenueDisplayPage() {
         <header className="flex items-center justify-between pb-4 border-b border-outline/30 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary via-purple-600 to-secondary flex items-center justify-center shadow-[0_0_24px_rgba(139,92,246,0.5)]">
-              <Icon name="sensors" size={28} className="text-white" />
+              <Icon name="sensors" size={28} className="text-[#FFF8F5]" />
             </div>
             <div className="flex flex-col">
               <span className="font-heading font-extrabold text-2xl text-on-surface tracking-tight">

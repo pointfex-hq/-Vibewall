@@ -2,7 +2,9 @@ export type ThemeKey =
   | "midnight-neon"
   | "minimal-paper"
   | "campus-sunset"
-  | "emerald-fest";
+  | "emerald-fest"
+  | "shanta-after-dark"
+  | "rustic-carnival";
 
 export interface RoomDTO {
   id: string;
@@ -11,6 +13,8 @@ export interface RoomDTO {
   theme: ThemeKey;
   status: "open" | "closed" | "expired";
   expires_at: string;
+  screen_token?: string;
+  screen_url?: string;
 }
 
 export interface PostDTO {
@@ -82,6 +86,8 @@ export interface RoomPreviewResponse {
   room: RoomDTO;
   is_owner: boolean;
   is_member: boolean;
+  screen_token?: string;
+  screen_url?: string;
 }
 
 export interface CreateRoomResponse {

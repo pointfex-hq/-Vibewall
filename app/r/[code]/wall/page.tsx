@@ -17,13 +17,17 @@ import { subscribeToRoom, getAuthState } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import AuthRequiredModal from "@/components/auth/AuthRequiredModal";
+import ErrorState from "@/components/ErrorState";
 import PhotoCard from "@/components/PhotoCard";
 import NoteCard from "@/components/NoteCard";
+import PhotoQuotaMeter from "@/components/PhotoQuotaMeter";
 import PollCard from "@/components/PollCard";
 import StoryStrip from "@/components/StoryStrip";
 import ComposerModal, { ComposerMode } from "@/components/ComposerModal";
 import VibeCardModal from "@/components/VibeCardModal";
 import { Icon } from "@/components/icons";
+import { BrandMark, FigmaBottomNav } from "@/components/figma";
+import { fireUploadConfetti } from "@/lib/confetti";
 
 export default function LiveSocialWallPage() {
   const params = useParams();
@@ -39,6 +43,12 @@ export default function LiveSocialWallPage() {
   });
 
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<{
+    status?: number;
+    code?: string;
+    message?: string;
+    isNetwork?: boolean;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "photos" | "notes">("all");
   const [copiedToast, setCopiedToast] = useState(false);
 
@@ -48,6 +58,7 @@ export default function LiveSocialWallPage() {
     Record<string, { liked: boolean; count: number }>
   >({});
   const likeInFlightRef = useRef<Set<string>>(new Set());
+  const likeActionIdRef = useRef<Record<string, number>>({});
   const pollInFlightRef = useRef<Set<string>>(new Set());
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
@@ -113,23 +124,31 @@ export default function LiveSocialWallPage() {
   const [selectedPostForVibeCard, setSelectedPostForVibeCard] = useState<PostDTO | null>(null);
 
   // Fetch initial room & feed data
-  useEffect(() => {
-    async function loadWall() {
-      setIsLoading(true);
-      try {
-        const preview = await api.getRoomPreview(roomCode);
-        setRoom(preview.room);
+  const loadWall = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const preview = await api.getRoomPreview(roomCode);
+      setRoom(preview.room);
 
-        const feedData = await api.getFeed(roomCode);
-        setFeed(feedData);
-      } catch (err) {
-        console.error("Failed to load wall:", err);
-      } finally {
-        setIsLoading(false);
-      }
+      const feedData = await api.getFeed(roomCode);
+      setFeed(feedData);
+    } catch (err: any) {
+      console.error("Failed to load wall:", err);
+      setLoadError({
+        status: err?.status,
+        code: err?.code,
+        message: err?.message,
+        isNetwork: Boolean(err?.isNetwork),
+      });
+    } finally {
+      setIsLoading(false);
     }
-    if (roomCode) loadWall();
   }, [roomCode]);
+
+  useEffect(() => {
+    if (roomCode) loadWall();
+  }, [roomCode, loadWall]);
 
   // Realtime subscription
   useEffect(() => {
@@ -204,7 +223,13 @@ export default function LiveSocialWallPage() {
         });
       },
       onPollUpdated: ({ poll }) => {
-        setFeed((prev) => ({ ...prev, active_poll: poll }));
+        setFeed((prev) => {
+          // Do not let a stale poll_updated overwrite a newly launched poll
+          // (issue #26). Only apply when there is no active poll or the ids
+          // match.
+          if (prev.active_poll && prev.active_poll.id !== poll.id) return prev;
+          return { ...prev, active_poll: poll };
+        });
       },
       onThemeUpdated: ({ theme }) => {
         setRoom((prev) => (prev ? { ...prev, theme } : prev));
@@ -265,6 +290,11 @@ export default function LiveSocialWallPage() {
     if (likeInFlightRef.current.has(targetId)) return false;
     likeInFlightRef.current.add(targetId);
 
+    // Track this action so a delayed/out-of-order response cannot overwrite a
+    // newer user action (issue #26).
+    const actionId = (likeActionIdRef.current[targetId] || 0) + 1;
+    likeActionIdRef.current[targetId] = actionId;
+
     const base = getLikeBase(targetType, targetId);
     const optimistic = {
       liked: !base.liked,
@@ -274,6 +304,8 @@ export default function LiveSocialWallPage() {
 
     try {
       const res = await api.toggleLike(targetType, targetId);
+      // Ignore stale responses from an earlier toggle.
+      if (likeActionIdRef.current[targetId] !== actionId) return true;
       // Reconcile with the authoritative response and update the feed.
       setOptimisticLikes((prev) => {
         const next = { ...prev };
@@ -297,13 +329,15 @@ export default function LiveSocialWallPage() {
       }));
       return true;
     } catch (err: any) {
-      // Roll back the optimistic like; the cards fall back to authoritative props.
-      setOptimisticLikes((prev) => {
-        const next = { ...prev };
-        delete next[targetId];
-        return next;
-      });
-      showActionNotice(err?.message || "Failed to update like. Please try again.");
+      // Only roll back if this is still the latest action.
+      if (likeActionIdRef.current[targetId] === actionId) {
+        setOptimisticLikes((prev) => {
+          const next = { ...prev };
+          delete next[targetId];
+          return next;
+        });
+        showActionNotice(err?.message || "Failed to update like. Please try again.");
+      }
       return false;
     } finally {
       likeInFlightRef.current.delete(targetId);
@@ -356,7 +390,13 @@ export default function LiveSocialWallPage() {
       pollInFlightRef.current.add(poll.id);
       try {
         const res = await api.votePoll(poll.id, optionId);
-        setFeed((prev) => ({ ...prev, active_poll: res.poll }));
+        // Only apply if the same poll is still active (issue #26): a newly
+        // launched poll must not be overwritten by a stale vote response.
+        setFeed((prev) =>
+          prev.active_poll && prev.active_poll.id === poll.id
+            ? { ...prev, active_poll: res.poll }
+            : prev
+        );
         return true;
       } catch (err: any) {
         if (err?.status === 401) {
@@ -427,6 +467,7 @@ export default function LiveSocialWallPage() {
         posts: [postRes.post, ...prev.posts.filter((p) => p.id !== postRes.post.id)],
       }));
       setPhotoCooldownRemaining(20);
+      fireUploadConfetti();
       return true;
     });
   };
@@ -444,33 +485,65 @@ export default function LiveSocialWallPage() {
 
   if (room?.status === "closed") return <main role="status" className="p-8">This room is closed.</main>;
 
+  if (loadError) {
+    return (
+      <ThemeWrapper themeKey="midnight-neon">
+        <div className="min-h-screen bg-surface text-on-surface">
+          <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+            <div className="mx-auto flex h-16 max-w-2xl items-center justify-between gap-2 px-4">
+              <Link
+                href="/"
+                className="flex min-w-0 items-center gap-2 text-on-surface transition-colors hover:text-primary"
+              >
+                <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
+                  <Icon name="sensors" size={18} />
+                </div>
+                <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
+                  VibeWall
+                </span>
+              </Link>
+            </div>
+          </header>
+          <ErrorState
+            status={loadError.status}
+            code={loadError.code}
+            message={loadError.message}
+            isNetwork={loadError.isNetwork}
+            roomCode={roomCode}
+            onRetry={loadWall}
+            backHref="/"
+            backLabel="Back to Home"
+          />
+        </div>
+      </ThemeWrapper>
+    );
+  }
+
   return (
     <ThemeWrapper themeKey={room?.theme || "midnight-neon"}>
-      <div className="flex flex-col min-h-screen bg-surface text-on-surface pb-28">
+      <div className="figma-paper flex min-h-screen flex-col pb-40 text-on-surface md:pb-28">
         {/* Sticky Header */}
-        <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
-          <div className="max-w-2xl mx-auto h-16 px-4 flex items-center justify-between">
+        <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-2xl items-center justify-between gap-2 px-4">
             <Link
               href="/"
-              className="flex items-center gap-2 group text-on-surface hover:text-primary transition-colors"
+              className="flex min-w-0 items-center gap-2 text-on-surface transition-colors hover:text-primary"
             >
-              <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
-                <Icon name="sensors" size={18} />
-              </div>
+              <BrandMark size={34} />
               <div className="flex flex-col">
                 <span className="font-heading font-extrabold text-xs uppercase tracking-tight text-primary">
                   VibeWall
                 </span>
-                <span className="font-heading font-bold text-xs text-on-surface truncate max-w-[140px] sm:max-w-[200px]">
+                <span className="max-w-[100px] truncate font-heading text-xs font-bold text-on-surface sm:max-w-[200px]">
                   {room?.title || "Live Wall"}
                 </span>
               </div>
             </Link>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 onClick={handleCopyCode}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline/50 hover:bg-primary-container/20 hover:text-primary text-xs font-bold text-on-surface transition-all active:scale-95"
+                className="figma-pill border border-outline/60 px-3 py-1.5 text-xs transition-all hover:text-primary active:scale-95"
                 title="Copy Room Invitation Code"
               >
                 <span>#{roomCode}</span>
@@ -490,6 +563,12 @@ export default function LiveSocialWallPage() {
 
         {/* Main Feed Container */}
         <main className="max-w-2xl mx-auto w-full px-4 pt-4 flex flex-col gap-5">
+          {isLoading && (
+            <div className="py-16 text-center text-on-surface-variant flex flex-col items-center gap-3">
+              <Icon name="progress_activity" size={32} className="animate-spin text-primary" />
+              <p className="font-heading font-semibold text-sm">Loading live wall…</p>
+            </div>
+          )}
           {/* Action notice toast (errors from likes, votes, etc.) */}
           {actionNotice && (
             <div
@@ -502,7 +581,7 @@ export default function LiveSocialWallPage() {
           )}
 
           {/* 1. Event Hero Banner */}
-          <section className="relative w-full rounded-2xl overflow-hidden bg-surface-container border border-outline shadow-xl">
+          <section className="figma-card relative w-full overflow-hidden rounded-3xl">
             <div className="relative h-40 sm:h-48 w-full">
               <Image
                 src="/assets/vibrant_university_night_music_festival_stage_with_glowing_violet_and_neon.png"
@@ -511,7 +590,7 @@ export default function LiveSocialWallPage() {
                 className="object-cover"
                 priority
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-surface-container via-surface-container/60 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#3B2929] via-[#3B2929]/60 to-transparent" />
 
               <div className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md">
                 <span className="relative flex h-2 w-2">
@@ -545,13 +624,19 @@ export default function LiveSocialWallPage() {
             </div>
           </section>
 
+          {/* Photo quota progress meter */}
+          <PhotoQuotaMeter current={feed.posts.length} loading={isLoading} />
+
           {/* 2. Interactive Poll (if active) — keyed by poll id so a new poll resets selection state */}
           {feed.active_poll && (
-            <PollCard key={feed.active_poll.id} poll={feed.active_poll} onVote={handlePollVote} />
+            <div id="poll" className="scroll-mt-24">
+              <PollCard key={feed.active_poll.id} poll={feed.active_poll} onVote={handlePollVote} />
+            </div>
           )}
 
           {/* 3. Chain Story Strip (if active) */}
           {feed.active_story && (
+            <div id="chain-story" className="scroll-mt-24">
             <StoryStrip
               story={feed.active_story}
               roomCode={roomCode}
@@ -565,6 +650,7 @@ export default function LiveSocialWallPage() {
                 });
               }}
             />
+            </div>
           )}
 
           {/* Feed Filter Tabs */}
@@ -653,7 +739,7 @@ export default function LiveSocialWallPage() {
         </main>
 
         {/* Floating Action Bar / Composer Trigger */}
-        <div className="fixed bottom-0 inset-x-0 z-40 pb-safe pt-2 bg-gradient-to-t from-surface via-surface/95 to-transparent pointer-events-none">
+        <div className="pointer-events-none fixed bottom-14 inset-x-0 z-40 bg-gradient-to-t from-surface via-surface/95 to-transparent pt-2 pb-safe md:bottom-0">
           <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-center gap-3 pointer-events-auto">
             <button
               onClick={() => {
@@ -665,7 +751,7 @@ export default function LiveSocialWallPage() {
                 });
               }}
               disabled={!auth.isReady}
-              className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-primary to-purple-600 text-on-primary font-heading font-bold text-xs sm:text-sm shadow-[0_0_24px_rgba(139,92,246,0.5)] flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all"
+              className="figma-primary-btn flex-1 px-4 py-3 text-xs sm:text-sm"
             >
               <Icon name="photo_camera" size={20} />
               <span>Post Photo</span>
@@ -681,13 +767,16 @@ export default function LiveSocialWallPage() {
                 });
               }}
               disabled={!auth.isReady}
-              className="flex-1 py-3 px-4 rounded-2xl bg-surface-container border border-outline text-on-surface hover:text-primary hover:border-primary font-heading font-bold text-xs sm:text-sm shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
+              className="figma-amber-btn flex-1 px-4 py-3 text-xs sm:text-sm"
             >
               <Icon name="edit_note" size={20} />
               <span>Write Note</span>
             </button>
           </div>
         </div>
+
+        {/* Figma mobile bottom navigation */}
+        <FigmaBottomNav code={roomCode} active="feed" />
 
         {/* Floating Composer Modal */}
         <ComposerModal

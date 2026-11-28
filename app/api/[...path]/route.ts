@@ -60,11 +60,26 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
       return NextResponse.json(res);
     }
 
+    // 1b. GET /api/rooms - List active public rooms
+    if (method === "GET" && path.length === 1 && path[0] === "rooms") {
+      const rooms = mockDB.getActiveRooms();
+      return NextResponse.json({ rooms });
+    }
+
     // 2. GET /api/rooms/[code]
     if (method === "GET" && path.length === 2 && path[0] === "rooms") {
       const room = mockDB.getRoom(path[1]);
       if (!room) return errorResponse(404, "VALIDATION_ERROR", "Room not found");
-      return NextResponse.json({ room, is_owner: true, is_member: true });
+      const origin = url.origin;
+      const screen_token = room.screen_token;
+      const screen_url = screen_token ? `${origin}/screen/${encodeURIComponent(screen_token)}` : undefined;
+      return NextResponse.json({
+        room,
+        is_owner: true,
+        is_member: true,
+        screen_token,
+        screen_url,
+      });
     }
 
     // 3. POST /api/rooms/[code]/join
@@ -83,6 +98,8 @@ async function handleRequest(req: NextRequest, { path }: { path: string[] }) {
 
     // 5. GET /api/rooms/[code]/feed
     if (method === "GET" && path.length === 3 && path[0] === "rooms" && path[2] === "feed") {
+      const room = mockDB.getRoom(path[1]);
+      if (!room) return errorResponse(404, "VALIDATION_ERROR", "Room not found");
       const includeHidden = url.searchParams.get("include_hidden") === "true";
       const feed = mockDB.getFeed(path[1], includeHidden);
       return NextResponse.json(feed);

@@ -231,15 +231,60 @@ export function getMockStore(): MockStore {
 
 // Helper query & mutation operations
 export const mockDB = {
+  getActiveRooms(): RoomDTO[] {
+    const store = getMockStore();
+    const active: RoomDTO[] = [];
+    const now = Date.now();
+    for (const r of store.rooms.values()) {
+      if (r.status === "open" && new Date(r.expires_at).getTime() > now) {
+        active.push({
+          id: r.id,
+          code: r.code,
+          title: r.title,
+          theme: r.theme,
+          status: r.status,
+          expires_at: r.expires_at,
+          screen_token: r.screen_token,
+        });
+      }
+    }
+    return active;
+  },
+
+  deleteRoom(code: string) {
+    const store = getMockStore();
+    return store.rooms.delete(code.toUpperCase());
+  },
+
+  clearRooms() {
+    const store = getMockStore();
+    store.rooms.clear();
+  },
+
+  resetStore(empty = false) {
+    if (empty) {
+      const store = getMockStore();
+      store.rooms.clear();
+      store.posts.clear();
+      store.notes.clear();
+      store.polls.clear();
+      store.stories.clear();
+    } else {
+      globalScope[globalKey] = initSeedStore();
+    }
+  },
+
   getRoom(code: string) {
     const store = getMockStore();
     return store.rooms.get(code.toUpperCase()) || null;
   },
 
   getRoomByToken(token: string) {
+    const trimmed = typeof token === "string" ? token.trim() : "";
+    if (!trimmed) return null;
     const store = getMockStore();
     for (const r of store.rooms.values()) {
-      if (r.screen_token === token) return r;
+      if (r.screen_token === trimmed) return r;
     }
     return null;
   },

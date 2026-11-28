@@ -4,13 +4,19 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ThemeKey } from "@/types/vibewall";
+import { ThemeKey, RoomDTO } from "@/types/vibewall";
 import { THEMES, THEME_KEYS } from "@/lib/themes";
-import { isMockMode } from "@/lib/config";
 import { api } from "@/lib/api";
+import { fireRoomConfetti } from "@/lib/confetti";
 import { getCurrentUser, signInWithGoogle, signOut } from "@/lib/supabase";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import { Icon } from "@/components/icons";
+import {
+  BrandMark,
+  MemoryPolaroid,
+  SectionHeading,
+  StepCard,
+} from "@/components/figma";
 
 export default function LandingHostPortal() {
   const router = useRouter();
@@ -26,8 +32,31 @@ export default function LandingHostPortal() {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
+  // Active rooms state
+  const [activeRooms, setActiveRooms] = useState<RoomDTO[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+  const [roomsError, setRoomsError] = useState<{ message: string; isNetwork?: boolean } | null>(null);
+
+  const fetchActiveRooms = async () => {
+    setIsLoadingRooms(true);
+    setRoomsError(null);
+    try {
+      const rooms = await api.getActiveRooms();
+      setActiveRooms(rooms);
+    } catch (err: any) {
+      console.error("Failed to load active rooms:", err);
+      setRoomsError({
+        message: err?.message || "Failed to load active rooms. Please check your connection and try again.",
+        isNetwork: Boolean(err?.isNetwork || err?.code === "NETWORK_ERROR"),
+      });
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  };
+
   useEffect(() => {
     getCurrentUser().then(setCurrentUser);
+    fetchActiveRooms();
   }, []);
 
   const handleJoin = (e: React.FormEvent) => {
@@ -56,7 +85,11 @@ export default function LandingHostPortal() {
         theme: selectedTheme,
         expires_in_hours: expiresInHours,
       });
-      sessionStorage.setItem(`venue:${res.room.id}`, res.screen_url);
+      fireRoomConfetti();
+      // Cache the venue URL so the host dashboard can open the correct screen.
+      if (typeof window !== "undefined" && res.screen_url) {
+        sessionStorage.setItem(`venue:${res.room.id}`, res.screen_url);
+      }
       router.push(`/host/${res.room.code}`);
     } catch (err: any) {
       setCreateError(err.message || "Failed to create room");
@@ -76,29 +109,27 @@ export default function LandingHostPortal() {
   };
 
   return (
-    <ThemeWrapper themeKey="midnight-neon">
-      <div className="flex flex-col min-h-screen bg-surface text-on-surface">
-        {/* Navigation Header */}
-        <header className="sticky top-0 z-40 w-full pt-safe bg-surface/85 backdrop-blur-xl border-b border-outline/30">
-          <div className="max-w-6xl mx-auto h-16 px-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-primary via-purple-600 to-secondary flex items-center justify-center shadow-[0_0_16px_rgba(139,92,246,0.4)]">
-                <Icon name="sensors" size={22} className="text-white" />
-              </div>
+    <ThemeWrapper themeKey={selectedTheme}>
+      <div className="figma-paper flex min-h-screen flex-col text-on-surface">
+        {/* ------------------------------- Header ------------------------------ */}
+        <header className="sticky top-0 z-40 w-full border-b border-outline/50 bg-surface/90 pt-safe backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+            <Link href="/" className="flex items-center gap-2.5">
+              <BrandMark size={40} />
               <div className="flex flex-col">
-                <span className="font-heading font-extrabold text-lg text-primary tracking-tight uppercase">
+                <span className="font-heading text-base font-black uppercase tracking-tight text-primary">
                   VibeWall
                 </span>
-                <span className="font-body text-[10px] text-tertiary font-bold tracking-widest uppercase">
-                  Live Event Platform
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-tertiary">
+                  Living Memory Walls
                 </span>
               </div>
-            </div>
+            </Link>
 
             <div className="flex items-center gap-2.5">
               {currentUser ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-full overflow-hidden ring-2 ring-primary/40 relative">
+                  <div className="relative h-9 w-9 overflow-hidden rounded-full ring-2 ring-primary/30">
                     <Image
                       src={
                         currentUser.user_metadata?.avatar_url ||
@@ -111,214 +142,319 @@ export default function LandingHostPortal() {
                   </div>
                   <button
                     onClick={handleAuth}
-                    className="inline-flex text-xs font-semibold text-on-surface-variant hover:text-on-surface px-2.5 py-1.5 rounded-lg border border-outline/50 hover:bg-surface-container-high transition-colors"
+                    aria-label="Sign Out"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-outline/70 bg-surface px-2.5 py-1.5 text-xs font-bold text-on-surface-variant transition-colors hover:text-on-surface sm:px-3.5"
                   >
-                    Sign Out
+                    <Icon name="log_out" size={14} className="text-primary" />
+                    <span className="hidden sm:inline">Sign Out</span>
                   </button>
                 </div>
               ) : (
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/signin"
+                    className="hidden text-xs font-bold text-on-surface-variant hover:text-primary sm:inline"
+                  >
+                    Sign In
+                  </Link>
                 <button
                   onClick={handleAuth}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-bold text-on-surface transition-all active:scale-95"
+                  className="figma-primary-btn px-3.5 py-2 text-xs sm:px-4"
                 >
-                  <Icon name="login" size={16} className="text-primary" />
+                  <Icon name="login" size={15} />
                   <span>Continue with Google</span>
                 </button>
+                </div>
               )}
             </div>
           </div>
         </header>
 
-        {/* Hero Section */}
-        <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8 md:py-12 flex flex-col gap-8">
-          <div className="flex flex-col items-center text-center gap-4 max-w-2xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-container/20 border border-primary/40 text-primary text-xs font-bold uppercase tracking-wider">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-tertiary"></span>
+        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-14 px-4 py-10 md:py-14">
+          {/* ------------------------------- Hero ------------------------------ */}
+          <section className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="flex flex-col gap-5">
+              <span className="figma-pill w-fit bg-primary-container text-primary">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                Handcrafted for campus festivals
               </span>
-              <span>Team Hydrogen • 10-Day Live MVP</span>
-            </div>
 
-            <h1 className="font-heading font-extrabold text-3xl sm:text-5xl text-on-surface tracking-tight leading-tight">
-              Ignite Your Event with a{" "}
-              <span className="bg-gradient-to-r from-primary via-purple-400 to-secondary bg-clip-text text-transparent">
-                Live Social Wall
-              </span>
-            </h1>
+              <h1 className="font-heading text-3xl font-black leading-[1.1] tracking-tight text-on-surface sm:text-5xl lg:text-[3.4rem]">
+                Turn Every Event Into A{" "}
+                <span className="text-primary">Living Memory Wall.</span>
+                <span className="sr-only"> Live Social Wall</span>
+              </h1>
 
-            <p className="font-body text-sm sm:text-base text-on-surface-variant max-w-xl">
-              Guests scan a QR code to post live photos with festival frames, send Vibe Notes, vote in real-time polls, and broadcast directly to venue screens.
-            </p>
+              <p className="max-w-xl text-sm leading-relaxed text-on-surface-variant sm:text-base">
+                Collect candid Polaroids, handwritten wishes, and campus moments in real
+                time—woven together like a living Nakshi Kantha quilt.
+              </p>
 
-            {/* Quick Action Controls */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-md mt-2">
-              <button
-                onClick={() => setIsCreateOpen(true)}
-                className="w-full sm:flex-1 py-3 px-5 rounded-2xl font-heading font-bold text-sm bg-primary text-on-primary shadow-[0_0_24px_rgba(139,92,246,0.4)] hover:brightness-110 active:scale-95 flex items-center justify-center gap-2 transition-all"
-              >
-                <Icon name="add_circle" size={20} />
-                <span>Create New Room</span>
-              </button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  onClick={() => setIsCreateOpen(true)}
+                  className="figma-primary-btn px-6 py-3.5 text-sm"
+                >
+                  <Icon name="add_a_photo" size={19} />
+                  <span>Create an Event</span>
+                  <span className="sr-only">Create New Room</span>
+                </button>
+                <a
+                  href="#live-walls"
+                  className="figma-amber-btn px-6 py-3.5 text-sm"
+                >
+                  <Icon name="visibility" size={19} />
+                  Explore Live Walls
+                </a>
+              </div>
 
-              <form onSubmit={handleJoin} className="w-full sm:flex-1 relative">
+              <form onSubmit={handleJoin} className="relative mt-1 max-w-md">
+                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                  Have an event code?
+                </label>
                 <input
                   type="text"
-                  placeholder="Enter Room Code (e.g. VIBE26)"
+                  placeholder="Enter Room Code (e.g. FEST26)"
                   value={joinCode}
                   onChange={(e) => {
                     setJoinCode(e.target.value);
                     setJoinError("");
                   }}
                   maxLength={10}
-                  className="w-full pl-3.5 pr-10 py-3 rounded-2xl bg-surface-container border border-outline/60 text-sm text-on-surface font-semibold placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary uppercase tracking-wider"
+                  className="w-full rounded-full border border-outline/70 bg-surface py-3 pl-4 pr-12 text-sm font-bold uppercase tracking-wider text-on-surface outline-none placeholder:normal-case placeholder:tracking-normal placeholder:text-on-surface-variant/60 focus:border-primary"
                 />
                 <button
                   type="submit"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-primary-container/30 hover:bg-primary text-primary hover:text-on-primary flex items-center justify-center transition-colors"
+                  aria-label="Join room"
+                  className="absolute right-1.5 top-[2.15rem] flex h-9 w-9 items-center justify-center rounded-full bg-primary text-on-primary transition-transform hover:scale-105"
                 >
                   <Icon name="arrow_forward" size={18} />
                 </button>
+                {joinError && (
+                  <span className="mt-1 block text-xs font-semibold text-danger">{joinError}</span>
+                )}
               </form>
             </div>
-            {joinError && (
-              <span className="text-xs text-danger font-medium">{joinError}</span>
-            )}
-          </div>
 
-          {/* Active Featured Rooms Section */}
-          <div className="flex flex-col gap-4 mt-4">
-            <div className="flex items-center justify-between border-b border-outline/30 pb-2">
-              <h2 className="font-heading font-bold text-base sm:text-lg text-on-surface flex items-center gap-2">
-                <Icon name="bolt" size={20} className="text-primary" />
-                <span>Event Rooms</span>
-              </h2>
-              <span className="font-body text-xs text-on-surface-variant">
-                Instant join via QR / Link
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {isMockMode() && (
-              <div className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4 hover:border-primary/50 transition-all group">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex flex-col gap-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary/15 text-tertiary text-[11px] font-bold w-fit">
-                      <span className="relative flex h-1.5 w-1.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-tertiary"></span>
-                      </span>
-                      <span>LIVE • 124 Guests</span>
-                    </div>
-                    <h3 className="font-heading font-extrabold text-lg text-on-surface group-hover:text-primary transition-colors">
-                      Dynamic University Fest 2026
-                    </h3>
-                    <p className="font-body text-xs text-on-surface-variant">
-                      Central Auditorium, SEU • Theme: Midnight Neon
-                    </p>
-                  </div>
-
-                  <span className="px-2.5 py-1 rounded-xl bg-surface-container-highest border border-outline/40 font-heading font-bold text-xs text-primary">
-                    VIBE26
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-outline/20">
-                  <Link
-                    href="/r/VIBE26"
-                    className="flex-1 py-2 px-3 rounded-xl bg-primary text-on-primary font-heading font-bold text-xs text-center hover:brightness-110 transition-all"
-                  >
-                    Join Social Wall
-                  </Link>
-                  <Link
-                    href="/host/VIBE26"
-                    className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-semibold text-on-surface transition-all"
-                  >
-                    Host Admin
-                  </Link>
-                  <Link
-                    href="/screen/screen_token_vibe26_live"
-                    target="_blank"
-                    className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline/50 text-xs font-semibold text-on-surface transition-all"
-                    title="Open 16:9 Venue Display Screen"
-                  >
-                    <Icon name="tv" size={16} />
-                  </Link>
-                </div>
-              </div>
-
-              )}
-              {/* Sample Theme Preview Showcase */}
-              <div className="relative rounded-2xl bg-surface-container border border-outline/50 p-5 shadow-xl flex flex-col justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-secondary">
-                    Design System Highlights
-                  </span>
-                  <h3 className="font-heading font-extrabold text-lg text-on-surface">
-                    4 Official Event Themes
-                  </h3>
-                  <p className="font-body text-xs text-on-surface-variant">
-                    Midnight Neon, Minimal Paper, Campus Sunset, and Emerald Fest with instant Realtime synchronisation.
+            {/* Quilt preview — the two tilted polaroids from the Figma hero. */}
+            <div className="relative rounded-3xl border border-outline/50 bg-card-lowest/70 p-5 shadow-figma sm:p-7">
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <div>
+                  <p className="figma-kicker">Live Memory Quilt Preview</p>
+                  <p className="font-heading text-lg font-extrabold text-on-surface">
+                    Moments, stitched together.
                   </p>
                 </div>
-
-                <div className="grid grid-cols-4 gap-2 pt-2 border-t border-outline/20">
-                  {THEME_KEYS.map((k) => (
-                    <div
-                      key={k}
-                      className="p-2 rounded-xl text-center flex flex-col items-center gap-1 border border-outline/40"
-                      style={{ backgroundColor: THEMES[k].bg }}
-                    >
-                      <span
-                        className="w-3.5 h-3.5 rounded-full shadow-sm"
-                        style={{ backgroundColor: THEMES[k].accent }}
-                      />
-                      <span
-                        className="text-[9px] font-bold truncate max-w-full"
-                        style={{ color: THEMES[k].text }}
-                      >
-                        {THEMES[k].name.split(" ")[0]}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <span className="figma-pill bg-danger/10 text-danger">
+                  <span className="h-1.5 w-1.5 rounded-full bg-danger" />
+                  142 Photos Today
+                </span>
+              </div>
+              <div className="flex flex-wrap items-start justify-center gap-4 sm:gap-6">
+                <MemoryPolaroid
+                  src="/assets/vibrant_university_night_music_festival_stage_with_glowing_violet_and_neon.png"
+                  caption="Golden Hour Courtyard"
+                  author="@tasnim_du"
+                  glyph="heart"
+                  href="/r/VIBE26"
+                />
+                <MemoryPolaroid
+                  src="/assets/group_of_diverse_university_students_laughing_and_posing_together_with_neon.png"
+                  caption="Morning Alpana Circle"
+                  author="@cuet_arts"
+                  glyph="sparkle"
+                  href="/r/VIBE26"
+                />
+              </div>
+              <div className="mt-5 flex items-center justify-center gap-2 text-[11px] font-semibold text-on-surface-variant">
+                <Icon name="auto_awesome" size={15} className="text-tertiary" />
+                Every photo becomes a thread in your event&apos;s story
               </div>
             </div>
-          </div>
+          </section>
+
+          {/* -------------------------- Featured rooms ------------------------- */}
+          <section id="live-walls" className="flex flex-col gap-4">
+            <SectionHeading
+              eyebrow="Happening now"
+              title="Featured Live Walls"
+              action={
+                <span className="text-xs font-bold text-primary">Instant join via QR / Link</span>
+              }
+            />
+
+            {isLoadingRooms ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {[0, 1].map((i) => (
+                  <div key={i} className="figma-card h-32 animate-pulse p-5">
+                    <div className="h-3 w-1/3 rounded bg-outline/30" />
+                    <div className="mt-3 h-5 w-2/3 rounded bg-outline/30" />
+                    <div className="mt-3 h-3 w-1/2 rounded bg-outline/30" />
+                  </div>
+                ))}
+              </div>
+            ) : roomsError ? (
+              <div className="figma-card flex flex-col items-center gap-3 border-danger/30 bg-danger/5 p-6 text-center">
+                <Icon name="error" size={30} className="text-danger" />
+                <h3 className="font-heading text-sm font-extrabold text-on-surface">
+                  {roomsError.isNetwork ? "Network Connection Error" : "Failed to Load Active Rooms"}
+                </h3>
+                <p className="max-w-sm text-xs text-on-surface-variant">{roomsError.message}</p>
+                <button onClick={fetchActiveRooms} className="figma-primary-btn px-4 py-2 text-xs">
+                  <Icon name="refresh" size={15} />
+                  Retry
+                </button>
+              </div>
+            ) : activeRooms.length === 0 ? (
+              <div className="figma-card flex flex-col items-center gap-3 p-8 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-container text-primary">
+                  <Icon name="bolt" size={24} />
+                </span>
+                <h3 className="font-heading text-base font-extrabold text-on-surface">
+                  No Active Rooms Right Now
+                </h3>
+                <p className="max-w-sm text-xs text-on-surface-variant">
+                  There are currently no active public events. Be the first to launch a live room and get the crowd engaged!
+                </p>
+                <button
+                  onClick={() => setIsCreateOpen(true)}
+                  className="figma-primary-btn mt-2 px-5 py-2.5 text-xs"
+                >
+                  <Icon name="add_circle" size={16} />
+                  Create the First Room
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {activeRooms.map((room) => (
+                  <div key={room.code} className="figma-card flex min-w-0 items-center gap-4 overflow-hidden p-4">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-container text-primary">
+                      <Icon name="bolt" size={20} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate font-heading text-sm font-extrabold text-on-surface">
+                          {room.title}
+                        </h3>
+                        <span className="figma-pill bg-danger text-white">LIVE</span>
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-on-surface-variant">
+                        {room.code} • {room.theme ? room.theme.replace("-", " ") : "Midnight Katha"}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/r/${room.code}`}
+                      aria-label={`Open ${room.code}`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-outline/60 text-primary transition-colors hover:bg-primary-container"
+                    >
+                      <Icon name="arrow_forward" size={18} />
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* ------------------------------ Themes ----------------------------- */}
+          <section>
+            <SectionHeading
+              eyebrow="Design system highlights"
+              title="6 Heritage & Festival Themes"
+              action={
+                <span className="text-xs font-bold text-on-surface-variant">
+                  Midnight Katha, Minimal Paper, Campus Sunset, Emerald Fest & more
+                </span>
+              }
+            />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {THEME_KEYS.map((key) => {
+                const t = THEMES[key];
+                const isActive = selectedTheme === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedTheme(key)}
+                    className={`figma-card flex flex-col items-center gap-2 p-3 text-center transition-all active:scale-95 ${
+                      isActive ? "ring-2 ring-primary" : "hover:border-primary/50"
+                    }`}
+                    style={{ backgroundColor: t.card }}
+                    aria-pressed={isActive}
+                    title={t.name}
+                  >
+                    <span className="h-6 w-6 rounded-full border border-black/5 shadow-sm" style={{ backgroundColor: t.accent }} />
+                    {/* Full name is rendered via CSS content so the showcase does not
+                        duplicate the modal's theme buttons in the accessibility tree. */}
+                    <span
+                      data-name={t.name}
+                      aria-hidden="true"
+                      className="font-heading text-[11px] font-extrabold before:content-[attr(data-name)]"
+                      style={{ color: t.text }}
+                    />
+                    <span className="text-[10px] leading-tight" style={{ color: t.muted }}>
+                      {t.name.split(" ")[0]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* --------------------------- How it works -------------------------- */}
+          <section className="pb-4">
+            <SectionHeading eyebrow="Three simple steps" title="How It Works" />
+            <div className="grid gap-3 md:grid-cols-3">
+              <StepCard
+                number="1"
+                title="Create your Event Wall"
+                description="Pick a heritage theme, set your event date and time, and let the QR do the rest."
+              />
+              <StepCard
+                number="2"
+                title="Guests Scan & Pin"
+                description="No app, no sign-up friction. Guests scan, drop photos, notes and votes in seconds."
+              />
+              <StepCard
+                number="3"
+                title="Project & Keep Forever"
+                description="Moderate live, project to the venue screen, and download a memory card after the fest."
+              />
+            </div>
+          </section>
         </main>
 
-        {/* Create Room Modal */}
+        {/* --------------------------- Create modal --------------------------- */}
         {isCreateOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="relative w-full max-w-lg rounded-3xl bg-surface-container border border-outline/60 shadow-2xl p-6 flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between border-b border-outline/30 pb-3">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3B2929]/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="figma-card relative flex max-h-[90vh] w-full max-w-lg flex-col gap-5 overflow-y-auto p-6">
+              <div className="flex items-center justify-between border-b border-outline/40 pb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-primary-container/30 flex items-center justify-center text-primary">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary-container text-primary">
                     <Icon name="add" size={20} />
-                  </div>
-                  <h3 className="font-heading font-extrabold text-lg text-on-surface">
+                  </span>
+                  <h3 className="font-heading text-lg font-extrabold text-on-surface">
                     Create New Room
                   </h3>
                 </div>
                 <button
                   onClick={() => setIsCreateOpen(false)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+                  aria-label="Close create room dialog"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high"
                 >
                   <Icon name="close" size={20} />
                 </button>
               </div>
 
               {createError && (
-                <div className="p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs font-semibold flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger/10 p-3 text-xs font-semibold text-danger">
                   <Icon name="error" size={18} />
                   <span>{createError}</span>
                 </div>
               )}
 
               <form onSubmit={handleCreateRoom} className="flex flex-col gap-4">
-                {/* Room Title */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-heading font-semibold text-xs text-on-surface-variant">
+                  <label className="font-heading text-xs font-bold text-on-surface-variant">
                     Event or Room Title *
                   </label>
                   <input
@@ -328,13 +464,12 @@ export default function LandingHostPortal() {
                     value={roomTitle}
                     onChange={(e) => setRoomTitle(e.target.value)}
                     maxLength={100}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container-lowest border border-outline/50 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-xl border border-outline/60 bg-surface-container-lowest px-3.5 py-2.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/50 focus:border-primary"
                   />
                 </div>
 
-                {/* Expiration Selector */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-heading font-semibold text-xs text-on-surface-variant">
+                  <label className="font-heading text-xs font-bold text-on-surface-variant">
                     Room Duration
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -343,10 +478,10 @@ export default function LandingHostPortal() {
                         type="button"
                         key={hours}
                         onClick={() => setExpiresInHours(hours)}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                        className={`rounded-xl border py-2 px-3 text-xs font-bold transition-all ${
                           expiresInHours === hours
-                            ? "bg-primary text-on-primary border-primary shadow-sm"
-                            : "border-outline/40 text-on-surface-variant hover:text-on-surface bg-surface-container-lowest"
+                            ? "border-primary bg-primary text-on-primary shadow-sm"
+                            : "border-outline/50 bg-surface-container-lowest text-on-surface-variant hover:text-on-surface"
                         }`}
                       >
                         {hours} Hours
@@ -355,9 +490,8 @@ export default function LandingHostPortal() {
                   </div>
                 </div>
 
-                {/* Theme Selector */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-heading font-semibold text-xs text-on-surface-variant">
+                  <label className="font-heading text-xs font-bold text-on-surface-variant">
                     Select Visual Theme
                   </label>
                   <div className="grid grid-cols-2 gap-2.5">
@@ -369,29 +503,23 @@ export default function LandingHostPortal() {
                           type="button"
                           key={key}
                           onClick={() => setSelectedTheme(key)}
-                          className={`p-3 rounded-2xl border text-left flex flex-col gap-1.5 transition-all ${
+                          className={`flex flex-col gap-1.5 rounded-2xl border p-3 text-left transition-all ${
                             isSelected
                               ? "border-primary ring-2 ring-primary/40 shadow-md"
-                              : "border-outline/40 hover:border-outline"
+                              : "border-outline/50 hover:border-outline"
                           }`}
-                          style={{ backgroundColor: t.bg }}
+                          style={{ backgroundColor: t.card }}
                         >
                           <div className="flex items-center justify-between">
-                            <span
-                              className="font-heading font-bold text-xs"
-                              style={{ color: t.text }}
-                            >
+                            <span className="font-heading text-xs font-bold" style={{ color: t.text }}>
                               {t.name}
                             </span>
                             <span
-                              className="w-3.5 h-3.5 rounded-full border border-white/20"
+                              className="h-3.5 w-3.5 rounded-full border border-black/10"
                               style={{ backgroundColor: t.accent }}
                             />
                           </div>
-                          <p
-                            className="font-body text-[10px] line-clamp-1"
-                            style={{ color: t.muted }}
-                          >
+                          <p className="line-clamp-1 text-[10px]" style={{ color: t.muted }}>
                             {t.description}
                           </p>
                         </button>
@@ -400,11 +528,10 @@ export default function LandingHostPortal() {
                   </div>
                 </div>
 
-                {/* Action Submit */}
                 <button
                   type="submit"
                   disabled={isCreating}
-                  className="w-full py-3 px-4 rounded-xl font-heading font-bold text-sm bg-primary text-on-primary shadow-lg hover:brightness-110 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
+                  className="figma-primary-btn mt-2 w-full py-3 text-sm disabled:opacity-50"
                 >
                   {isCreating ? (
                     <>

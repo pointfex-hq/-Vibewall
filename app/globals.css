@@ -3,17 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --vw-bg: #09090B;
-  --vw-card: #18181B;
-  --vw-card-low: #131315;
-  --vw-card-high: #27272A;
-  --vw-card-lowest: #0E0E10;
-  --vw-text: #FAFAFA;
-  --vw-muted: #A1A1AA;
-  --vw-accent: #8B5CF6;
-  --vw-accent-container: rgba(139, 92, 246, 0.2);
+  /* Figma "Heritage Wall" design tokens (default until a theme wrapper overrides). */
+  --vw-bg: #FFF8F5;
+  --vw-card: #FFFFFF;
+  --vw-card-low: #FFF0EA;
+  --vw-card-high: #FCE3D9;
+  --vw-card-lowest: #FFFCFA;
+  --vw-text: #3B2929;
+  --vw-muted: #7C6160;
+  --vw-accent: #A61C3C;
+  --vw-accent-container: rgba(166, 28, 60, 0.1);
   --vw-on-accent: #FFFFFF;
-  --vw-border: #27272A;
+  --vw-border: #F2D9D1;
+  /* Supporting Figma palette */
+  --figma-gold: #C0872B;
+  --figma-terracotta: #D97C5C;
+  --figma-ink: #3B2929;
+
+  /* Centrally defined font variables (match fonts loaded in app/layout.tsx). */
+  --font-inter: "Inter";
+  --font-jakarta: "Plus Jakarta Sans";
 }
 
 @layer base {
@@ -34,6 +43,28 @@
 
   body {
     overscroll-behavior-y: none;
+  }
+
+  /* Spring micro-interaction (issue #20) — subtle scale/opacity pop. */
+  @keyframes spring-pop {
+    0% { transform: scale(0.85); opacity: 0; }
+    60% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .animate-spring-pop {
+    animation: spring-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Respect reduced-motion preferences (issue #27). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -79,4 +110,99 @@
   100% {
     width: 100%;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Figma "Heritage Wall" design system utilities                       */
+/* ------------------------------------------------------------------ */
+
+/* Soft paper quilt texture used behind the landing hero and wall feed. */
+.figma-paper {
+  background-color: var(--vw-bg);
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(166, 28, 60, 0.035) 0, transparent 38%),
+    radial-gradient(circle at 88% 72%, rgba(192, 135, 43, 0.04) 0, transparent 42%);
+}
+
+.figma-card {
+  background: var(--vw-card);
+  border: 1px solid var(--vw-border);
+  border-radius: 1.25rem;
+  box-shadow: 0 8px 24px rgba(86, 45, 40, 0.07);
+}
+
+.figma-raised {
+  box-shadow: 0 12px 32px rgba(86, 45, 40, 0.12);
+}
+
+/* Polaroid-style memory card with the handmade tape accent. */
+.figma-polaroid {
+  background: #FFFFFF;
+  border-radius: 0.9rem;
+  padding: 0.55rem 0.55rem 0.85rem;
+  box-shadow: 0 10px 26px rgba(86, 45, 40, 0.14);
+  transform: rotate(-1.5deg);
+}
+.figma-polaroid:nth-child(even) {
+  transform: rotate(1.5deg);
+}
+
+.figma-tape {
+  display: block;
+  width: 3.1rem;
+  height: 1.1rem;
+  margin: -0.7rem auto 0.45rem;
+  border-radius: 2px;
+  background: rgba(217, 124, 92, 0.55);
+  transform: rotate(-3deg);
+}
+
+.figma-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  background: var(--vw-accent);
+  color: var(--vw-on-accent);
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(166, 28, 60, 0.2);
+  transition: transform 150ms ease, filter 150ms ease;
+}
+.figma-primary-btn:hover { filter: brightness(1.07); }
+.figma-primary-btn:active { transform: scale(0.98); }
+
+.figma-amber-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  background: #B96A24;
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(185, 106, 36, 0.2);
+  transition: transform 150ms ease, filter 150ms ease;
+}
+.figma-amber-btn:hover { filter: brightness(1.07); }
+.figma-amber-btn:active { transform: scale(0.98); }
+
+.figma-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  background: var(--vw-card-low);
+  color: var(--vw-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+}
+
+.figma-kicker {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vw-accent);
 }

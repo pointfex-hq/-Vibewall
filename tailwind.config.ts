@@ -32,15 +32,20 @@ const config: Config = {
         "primary-container": "var(--vw-accent-container)",
         "on-primary": "var(--vw-on-accent)",
         outline: "var(--vw-border)",
-        tertiary: "#10B981",
-        secondary: "#EC4899",
-        success: "#22C55E",
-        warning: "#F59E0B",
-        danger: "#EF4444",
+        // Figma heritage palette accents
+        tertiary: "#C0872B",
+        secondary: "#D97C5C",
+        success: "#4E8C6A",
+        warning: "#D99A2B",
+        danger: "#A61C3C",
+      },
+      boxShadow: {
+        figma: "0 8px 24px rgba(86, 45, 40, 0.08)",
+        polaroid: "0 10px 30px rgba(86, 45, 40, 0.12)",
       },
       fontFamily: {
-        heading: ["'Plus Jakarta Sans'", "sans-serif"],
-        body: ["Inter", "-apple-system", "sans-serif"],
+        heading: ["var(--font-jakarta)", "sans-serif"],
+        body: ["var(--font-inter)", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
       },
       borderRadius: {
         xl: "1rem",
@@ -49,7 +54,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 };
 
 export default config;

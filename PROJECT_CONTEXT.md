@@ -646,3 +646,344 @@ E2E: `Composer Shows Authenticated Identity` added and passing; full suite → *
 Remaining issues: none.
 
 ---
+
+## 23. Issue #24 — Home Navigation, Demo Room Dependency and API Error Handling (P0)
+
+### 23.1 Summary
+
+Landing page previously hardcoded a fake `VIBE26` room card ("Dynamic University Fest 2026", "LIVE • 124 Guests", "Central Auditorium, SEU") linking to `/r/VIBE26`, `/host/VIBE26`, and `/screen/screen_token_vibe26_live`. Invalid room codes silently rendered empty fake shells. Mock screen-token lookup fell back to the demo room. Host dashboard rendered fake "Room Status: Open" for missing rooms and never verified `is_owner`. Venue screen looped forever on invalid tokens.
+
+### 23.2 Implementation
+
+- `app/page.tsx`: replaced hardcoded room card with a real `api.getActiveRooms()`-driven grid, plus loading skeleton, network/error state with Retry, and empty state ("No Active Rooms Right Now"). `Create the First Room` CTA.
+- `app/api/[...path]/route.ts`: added `GET /api/rooms` listing endpoint; feed endpoint now 404s for missing rooms; room preview returns `screen_token`/`screen_url`; screen endpoint rejects unknown tokens (no fallback).
+- `lib/mock-data.ts`: added `getActiveRooms()`, `clearRooms()`, `resetStore()`; removed `VIBE26` fallback in `getRoomByToken()`; `getFeed()` now throws 404 for missing rooms.
+- `lib/api.ts`: network-error handling (status 0, code `NETWORK_ERROR`, `isNetwork`), consistent HTTP error codes (UNAUTHORIZED/FORBIDDEN/NOT_FOUND/SERVER_ERROR); `getActiveRooms()`; mock fallbacks preserve server error semantics (no silent collapse into 404); `getRoomPreview`/`getFeed`/`getScreenData` return structured errors.
+- `components/ErrorState.tsx`: reusable 401/403/404/500/network error UI with Retry and Sign-In actions.
+- `app/r/[code]/page.tsx`, `app/r/[code]/wall/page.tsx`, `app/r/[code]/story/[storyId]/page.tsx`, `app/host/[code]/page.tsx`, `app/screen/[token]/page.tsx`: wired `ErrorState` with structured status/code/isNetwork, loading states, retry; host page enforces `is_owner` (403 otherwise) and resolves `screen_url` from the room's real screen token (no hardcoded demo token).
+- `types/vibewall.ts`: added `screen_token?` and `screen_url?` to `RoomDTO` and `RoomPreviewResponse`.
+
+### 23.3 Tests
+
+- `tests/regression-navigation-errors.mjs`: 18 assertions covering valid room, missing room (404), 401, 403, 500, offline/network, empty landing, host 403, screen 404 — all passing.
+- Existing `tests/e2e-ui-test.mjs`: still **52/52 PASS**.
+
+### 23.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+- `node tests/e2e-ui-test.mjs` → 52/52 PASS.
+
+Remaining issues: none for this issue.
+
+## 25. Issue #26 — Optimistic Like/Vote Rollback and Poll State Reset
+
+### 25.1 Summary
+
+Fixed failed like/vote operations leaving the UI in an incorrect state and stale poll state preventing guests from voting in a newly launched poll.
+
+### 25.2 Implementation
+
+- `app/r/[code]/wall/page.tsx`:
+  - `runLikeAction`: added per-target action-id tracking so a delayed/out-of-order response cannot overwrite a newer user action or roll back a newer optimistic state.
+  - `handlePollVote`: only applies the server result when the same poll is still active (guards against a newly launched poll being overwritten by a stale vote response).
+  - Realtime `onPollUpdated`: skips stale poll payloads whose id differs from the active poll.
+- `app/host/[code]/page.tsx`: same stale-poll guard in `onPollUpdated`.
+- `components/PollCard.tsx`: added `submittingRef` guard against duplicate rapid votes; `useEffect` sync skips while submitting; reverts `selectedOptionId` on failure.
+
+### 25.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 25.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.
+
+## 26. Issue #27 — Tailwind Animation Plugin and CSS Font Variables
+
+### 26.1 Summary
+
+Resolved missing `tailwindcss-animate` dependency/configuration and undefined CSS font variables (`--font-inter`, `--font-jakarta`) that broke transitions and typography.
+
+### 26.2 Implementation
+
+- Installed `tailwindcss-animate@^1.0.7` (compatible with Tailwind 3.4) and updated `package-lock.json`.
+- Registered plugin in `tailwind.config.ts`: `plugins: [require("tailwindcss-animate")]`.
+- Defined `--font-inter` and `--font-jakarta` in `app/globals.css` `:root` to match fonts loaded in `app/layout.tsx`.
+- Centralized typography: `tailwind.config.ts` `fontFamily` now references `var(--font-jakarta)` / `var(--font-inter)`.
+- Added `prefers-reduced-motion` media query in `app/globals.css` to disable animations/transitions.
+
+### 26.3 Verification
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED; compiled CSS contains `animate-in`, `fade-in`, `slide-in-from-top-2`, `--font-inter`, `--font-jakarta`.
+- `node tests/e2e-ui-test.mjs` → 52/52 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+- `npm run lint` → NOT VERIFIED (interactive `next lint` setup prompt; no ESLint config).
+
+Remaining issues: none for this issue.
+
+## 27. Issue #34 — Object URL Memory Leaks in Photo Preview and Compression
+
+### 27.1 Summary
+
+Prevented browser memory buildup from unreleased temporary Object URLs during photo selection, preview, compression, and replacement.
+
+### 27.2 Implementation
+
+- `lib/upload/compress.ts`: revoked the temporary URL in `canvasCompressFallback` on both load and error paths.
+- `components/ComposerModal.tsx`: added `compressionIdRef` for stale-async safety; revoke previous preview URL on replacement, clear, submit success, close, and unmount; only revoke `blob:` URLs (never Cloudinary/external URLs).
+
+### 27.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 27.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.
+
+## 28. Issue #37 — Sign Out Accessible on Mobile
+
+### 28.1 Summary
+
+Fixed the responsive navigation issue that hid the Sign Out button below 640px by removing `hidden sm:inline-flex` and rendering a compact icon button with a responsive text label, preserving desktop/tablet layout.
+
+### 28.2 Implementation
+
+- `app/page.tsx`: Sign Out button now always visible; shows `log_out` icon on mobile and "Sign Out" text on `sm+`.
+- `components/icons.tsx`: added `log_out` → `LogOut` mapping.
+
+### 28.3 Tests
+
+- Responsive probe: Sign Out visible at 320/375/390/430px with no horizontal overflow; sign-out clears mock state and shows signed-out state.
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 28.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.
+
+## 29. Issue #33 — Minimal Paper Theme Contrast and Button Readability
+
+### 29.1 Summary
+
+Fixed the Minimal Paper light theme where white text on light backgrounds produced ~1.04:1 contrast. Made theme preview cards theme-aware (container color + active button use the theme's own text token instead of hardcoded white).
+
+### 29.2 Implementation
+
+- `app/host/[code]/page.tsx`: theme preview card container now sets `color: t.text`; active-theme button uses `backgroundColor: t.text` (translucent) + `color: t.text` instead of `bg-white/20 text-white`.
+
+### 29.3 Verification
+
+- Contrast probe (Minimal Paper, host dashboard): no text pair below 4.5:1.
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 52/52 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none for this issue.
+
+## 30. Issue #9 — Swipe-to-Like on Wall Cards
+
+### 30.1 Summary
+
+Added a dependency-free horizontal swipe-to-like gesture to PhotoCard and NoteCard while preserving tap-to-like, with threshold-based recognition, vertical-scroll preservation, button-tap exclusion, optimistic rollback (issue #26), and reduced-motion support.
+
+### 30.2 Implementation
+
+- `lib/useSwipeToLike.ts` (new): touch gesture hook with 50px threshold, 15px vertical tolerance, interactive-element exclusion, reduced-motion-aware transform, single trigger per gesture.
+- `components/PhotoCard.tsx`, `components/NoteCard.tsx`: attached swipe handlers + transform feedback.
+
+### 30.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 30.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.
+
+## 31. Issue #11 — Room Photo Quota Progress Meter
+
+### 31.1 Summary
+
+Added a reusable `PhotoQuotaMeter` component displaying current photo count, 15-photo quota, progress bar, remaining count, and full-quota state. Rendered on the wall; updates automatically via `feed.posts.length` after uploads/realtime.
+
+### 31.2 Implementation
+
+- `components/PhotoQuotaMeter.tsx` (new): reusable meter with compact + full variants, loading state, full state, ARIA attributes.
+- `app/r/[code]/wall/page.tsx`: rendered meter above the poll using `feed.posts.length`.
+- `tests/e2e-ui-test.mjs`: added "Photo Quota Meter Rendered" assertion.
+
+### 31.3 Notes
+
+- Quota source: project spec (15 photos). The backend enforces 15 per user per room; the meter reflects the room feed's current photo count against the 15 display threshold. If a room-wide cap is required, coordinate with Alvi (no new API fields invented).
+
+### 31.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 53/53 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none for this issue.
+
+## 32. Issue #20 — Canvas Confetti and Spring Micro-interactions
+
+### 32.1 Summary
+
+Added a reusable, throttled canvas-confetti utility (respecting prefers-reduced-motion) triggered on meaningful success events (photo publish, poll creation, room creation), plus a subtle spring-pop micro-interaction animation for modals and poll vote confirmation.
+
+### 32.2 Implementation
+
+- `lib/confetti.ts` (new): wraps `canvas-confetti` with reduced-motion guard, throttling (1.5s), and `fireRoomConfetti`/`fireUploadConfetti`/`firePollConfetti` helpers.
+- `app/page.tsx`, `app/r/[code]/wall/page.tsx`, `app/host/[code]/page.tsx`: trigger confetti on room creation, photo publish, and poll creation success.
+- `app/globals.css`: added `spring-pop` keyframe + `.animate-spring-pop` class.
+- `components/ComposerModal.tsx`, `components/PollCard.tsx`: applied `animate-spring-pop`.
+
+### 32.3 Tests
+
+- `tests/e2e-ui-test.mjs`: 52/52 PASS.
+- `tests/regression-navigation-errors.mjs`: 18/18 PASS.
+
+### 32.4 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+
+Remaining issues: none for this issue.
+
+## 33. Issue #25 — Chain Story Add Photo Upload Routing (verified + frame preview fix)
+
+### 33.1 Summary
+
+Verified that Chain Story Add Photo uploads already route exclusively to `api.addStoryEntry` (not `api.createPost`); added a frame preview so "Choose Frame Style" visually updates the composer preview (was a no-op visually).
+
+### 33.2 Implementation
+
+- `components/ComposerModal.tsx`: added `getFrameClasses` (mirroring `PhotoCard`) and applied it to the preview container so changing the frame updates the preview; kept story-entry mode hiding the frame selector.
+
+### 33.3 Verification
+
+- Manual test: posts stayed at 4, story entries 3 → 4, no duplicate wall post.
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 53/53 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none for this issue.
+
+## 34. Landing Page — Interactive Theme Selector
+
+### 34.1 Summary
+
+Made the "4 Official Event Themes" showcase on the landing page interactive: clicking a theme swatch now switches the page theme (via `selectedTheme` state applied to `ThemeWrapper`), and the selection is reflected in the Create Room modal's theme pills.
+
+### 34.2 Implementation
+
+- `app/page.tsx`: `ThemeWrapper` now uses `themeKey={selectedTheme}`; showcase swatches are buttons that call `setSelectedTheme(k)` with active ring styling.
+
+### 34.3 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 53/53 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+
+Remaining issues: none.
+
+## 35. Merge of `origin/main` into `feat/frontend-ui` (conflict resolution)
+
+### 35.1 Summary
+
+Resolved all conflicts from merging backend-core work (`origin/main`) into the frontend branch, preserving both sides' intended behavior. No product feature was removed: Chain Story, issue fixes, and the interactive landing theme selector remain intact.
+
+### 35.2 Conflict resolutions
+
+- `app/host/[code]/page.tsx`: venue screen URL resolved from the room's real `screen_token` (issue #24), with `sessionStorage` cache from main as fallback.
+- `app/page.tsx`: kept the real active-rooms grid (issue #24), interactive theme showcase, and mobile Sign Out; added main's venue-URL caching on room creation and adopted the renamed "Continue with Google" CTA.
+- `app/r/[code]/story/[storyId]/page.tsx`: kept `ErrorState` plus main's `!story` "Return to Wall" fallback and load resets.
+- `app/r/[code]/wall/page.tsx`: kept `ErrorState`, added main's closed-room handling.
+- `app/screen/[token]/page.tsx`: one structured `loadError` state; `ErrorState` UI retained; room-closed event now sets a structured error.
+- `components/ComposerModal.tsx`: kept the `compressionIdRef` / object-URL revoke lifecycle (issue #34) plus main's compressing-state reset.
+- `lib/api.ts`: kept token-refresh-aware `send` helper and added structured network-error handling (issue #24) with `await` so aborted requests are caught.
+- `lib/mock-data.ts`: adopted main's `mockError` helper and per-voter poll vote tracking.
+- `package.json` / `package-lock.json`: kept both `tailwindcss-animate` and `postgres`; ran `npm install`.
+- `tests/e2e-ui-test.mjs`: restored the local Playwright executable path and updated assertions for main's renamed sign-in CTA and per-voter poll votes.
+
+### 35.3 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors).
+- `npm run build` → PASSED (`Compiled successfully`).
+- `node tests/e2e-ui-test.mjs` → 54/54 PASS.
+- `node tests/regression-navigation-errors.mjs` → 18/18 PASS.
+- `node verify-mock-api-errors.mjs` → 23/23 PASS.
+- `npm test` → PASSED (backend DB test skipped without a disposable database).
+
+Remaining issues: none.
+
+## 36. Figma UI Implementation — `feat/figma-ui-implementation`
+
+### 36.1 Reference and scope
+
+Implemented the Figma design "Untitled" (`F2WT9hLyMtmyM8a57gQl9G`, node 0-1) on a dedicated branch created from the latest `origin/feat/frontend-ui`. Design was inspected through Figma's public embed (captured frames for Landing Host Portal, Entry & Guest Access, mobile wall feed, Create Account, Welcome Back and Host Moderation dashboard). No replacement design was invented.
+
+### 36.2 Design system / tokens
+
+- `lib/themes.ts`: six Figma heritage themes on the existing keys so all rooms inherit the design — `midnight-neon` is now **Midnight Katha** (ivory paper, burgundy `#A61C3C`, marigold `#C0872B`, terracotta `#D97C5C`), plus Minimal Paper, Campus Sunset, Emerald Fest, and two new keys `shanta-after-dark` / `rustic-carnival` (`types/vibewall.ts` extended).
+- `tailwind.config.ts`: Figma accent colours (`tertiary` marigold, `secondary` terracotta, `danger` burgundy) and `shadow-figma` / `shadow-polaroid`.
+- `app/globals.css`: `:root` switched to the Figma paper palette; new `.figma-paper`, `.figma-card`, `.figma-polaroid`, `.figma-tape`, `.figma-primary-btn`, `.figma-amber-btn`, `.figma-pill`, `.figma-kicker` utilities; reduced-motion support retained.
+
+### 36.3 Screens and components
+
+- Landing (`app/page.tsx`): illustrated brand tile, hero "Turn Every Event Into A Living Memory Wall", Create an Event / Explore Live Walls CTAs, real quick-join, tilted memory-quilt polaroids using local assets, real active-room cards, interactive six-theme selector, and How It Works steps.
+- Entry gate (`app/r/[code]/page.tsx`): paper-card event banner, status pill, guest notice and Google/preview CTAs restyled to the Figma palette and radii.
+- Wall (`app/r/[code]/wall/page.tsx`): paper hero, warm quota/poll/story cards, `#chain-story` and `#poll` anchors, Figma mobile bottom navigation (`components/figma/index.tsx`) with real links; floating composer lifted above the nav.
+- Cards: `components/PhotoCard.tsx` now renders polaroid framing, tape and hashtag pill; `components/NoteCard.tsx` renders Figma mustard note cards (pinned = rose paper).
+- Host dashboard (`app/host/[code]/page.tsx`): circular-stat telemetry cards, pill tabs, Figma moderation queue cards with hashtag/time pills and paper note cards.
+- Venue display: stage background moved to Figma "Shanta After Dark" burgundy.
+- New auth screens (`app/signin/page.tsx`, `app/signup/page.tsx`, `components/figma/AuthScreen.tsx`) reproduce the Figma Welcome Back / Create Account frames. Google sign-in uses the real auth service; email/password creates a local session only in explicit mock mode and reports a clear limitation otherwise (no fabricated identity in real mode).
+
+### 36.4 Reusable components
+
+`components/figma/index.tsx` — `BrandMark`, `SectionHeading`, `MemoryPolaroid`, `StatCard`, `StepCard`, `AvatarBubble`, `HashtagPill`, `FigmaBottomNav`; `components/figma/AuthScreen.tsx`. `components/icons.tsx` gained `grid_view`, `person`, `auto_awesome`, `calendar_event` mappings.
+
+### 36.5 Functional integration preserved
+
+No route, API contract, auth flow, upload/compression path, realtime subscription or moderation action was removed. All test-visible labels and roles were preserved (including `Live Social Wall`, `Create New Room`, `Create the First Room`, entry CTAs, quota/poll/story assertions, VibeCard export, and host tab labels).
+
+### 36.6 Validation
+
+- `npx tsc --noEmit` → PASSED (0 errors)
+- `npm run build` → PASSED
+- `node tests/e2e-ui-test.mjs` → 54/54 PASS
+- `BASE_URL=http://localhost:3000 node tests/regression-navigation-errors.mjs` → 18/18 PASS
+- `node verify-mock-api-errors.mjs` → 23/23 PASS
+- Responsive sweep at 320/390/430/768/1024/1280 px across all seven routes → zero horizontal overflow
+- Mock sign-up → local session → landing redirect and sign-in auto-redirect verified in browser.
+
+Screenshots: `figma-implementation/*.png`.
+
+### 36.7 Known differences from Figma
+
+- The reference's simulated QR-camera and "Kantha avatar" picker are represented by the existing real room-code entry and Google identity flow; no fake camera/album interaction was added.
+- Auth screens' email/password path is local-mock only; real Supabase deployment still uses Google sign-in until an email provider is configured by the backend owner.
+- Theme card names use a CSS-generated label in the landing showcase so they do not duplicate the modal's accessible theme buttons.
+- No new runtime dependencies were added.
+
+Remaining issues: none for this implementation.
