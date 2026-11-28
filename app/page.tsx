@@ -9,6 +9,7 @@ import { THEMES, THEME_KEYS } from "@/lib/themes";
 import { api } from "@/lib/api";
 import { fireRoomConfetti } from "@/lib/confetti";
 import { getCurrentUser, signInWithGoogle, signOut } from "@/lib/supabase";
+import RoomSearch from "@/components/RoomSearch";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import { Icon } from "@/components/icons";
 import {
@@ -21,8 +22,9 @@ import {
 export default function LandingHostPortal() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [joinCode, setJoinCode] = useState("");
-  const [joinError, setJoinError] = useState("");
+  const [authReady, setAuthReady] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   // Create room modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -55,20 +57,12 @@ export default function LandingHostPortal() {
   };
 
   useEffect(() => {
-    getCurrentUser().then(setCurrentUser);
+    getCurrentUser()
+      .then(setCurrentUser)
+      .catch(() => setAuthError("Could not check your sign-in."))
+      .finally(() => setAuthReady(true));
     fetchActiveRooms();
   }, []);
-
-  const handleJoin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = joinCode.trim().toUpperCase();
-    if (!clean) return;
-    if (clean.length < 3) {
-      setJoinError("Please enter a valid room code");
-      return;
-    }
-    router.push(`/r/${clean}`);
-  };
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,14 +92,22 @@ export default function LandingHostPortal() {
   };
 
   const handleAuth = async () => {
-    if (currentUser) {
-      await signOut();
-      setCurrentUser(null);
-    } else {
-      await signInWithGoogle();
-      const u = await getCurrentUser();
-      setCurrentUser(u);
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      if (currentUser) {
+        const { error } = await signOut();
+        if (error) throw error;
+        setCurrentUser(null);
+      } else if (await signInWithGoogle() === "signed-in") {
+        setCurrentUser(await getCurrentUser());
+      } else {
+        return;
+      }
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
     }
+    setAuthBusy(false);
   };
 
   return (
@@ -142,6 +144,7 @@ export default function LandingHostPortal() {
                   </div>
                   <button
                     onClick={handleAuth}
+                    disabled={!authReady || authBusy}
                     aria-label="Sign Out"
                     className="inline-flex items-center gap-1.5 rounded-full border border-outline/70 bg-surface px-2.5 py-1.5 text-xs font-bold text-on-surface-variant transition-colors hover:text-on-surface sm:px-3.5"
                   >
@@ -150,24 +153,18 @@ export default function LandingHostPortal() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <Link
-                    href="/signin"
-                    className="hidden text-xs font-bold text-on-surface-variant hover:text-primary sm:inline"
-                  >
-                    Sign In
-                  </Link>
                 <button
                   onClick={handleAuth}
+                  disabled={!authReady || authBusy}
                   className="figma-primary-btn px-3.5 py-2 text-xs sm:px-4"
                 >
                   <Icon name="login" size={15} />
                   <span>Continue with Google</span>
                 </button>
-                </div>
               )}
             </div>
           </div>
+          {authError && <p role="alert" className="px-4 pb-2 text-center text-sm text-danger">{authError}</p>}
         </header>
 
         <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-14 px-4 py-10 md:py-14">
@@ -208,32 +205,7 @@ export default function LandingHostPortal() {
                 </a>
               </div>
 
-              <form onSubmit={handleJoin} className="relative mt-1 max-w-md">
-                <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-                  Have an event code?
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter Room Code (e.g. FEST26)"
-                  value={joinCode}
-                  onChange={(e) => {
-                    setJoinCode(e.target.value);
-                    setJoinError("");
-                  }}
-                  maxLength={10}
-                  className="w-full rounded-full border border-outline/70 bg-surface py-3 pl-4 pr-12 text-sm font-bold uppercase tracking-wider text-on-surface outline-none placeholder:normal-case placeholder:tracking-normal placeholder:text-on-surface-variant/60 focus:border-primary"
-                />
-                <button
-                  type="submit"
-                  aria-label="Join room"
-                  className="absolute right-1.5 top-[2.15rem] flex h-9 w-9 items-center justify-center rounded-full bg-primary text-on-primary transition-transform hover:scale-105"
-                >
-                  <Icon name="arrow_forward" size={18} />
-                </button>
-                {joinError && (
-                  <span className="mt-1 block text-xs font-semibold text-danger">{joinError}</span>
-                )}
-              </form>
+              <RoomSearch />
             </div>
 
             {/* Quilt preview — the two tilted polaroids from the Figma hero. */}
@@ -279,7 +251,15 @@ export default function LandingHostPortal() {
               eyebrow="Happening now"
               title="Featured Live Walls"
               action={
-                <span className="text-xs font-bold text-primary">Instant join via QR / Link</span>
+                <a
+                  href="#room-search"
+                  onClick={() => {
+                    document.getElementById("room-search")?.focus();
+                  }}
+                  className="text-xs font-bold text-primary underline-offset-4 hover:underline"
+                >
+                  Instant join via QR / Link
+                </a>
               }
             />
 

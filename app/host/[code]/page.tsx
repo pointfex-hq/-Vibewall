@@ -755,9 +755,16 @@ export default function HostDashboardPage() {
                   Room QR Invitation Gate
                 </h3>
                 {qrCodeUrl && (
-                  <div className="p-3 rounded-2xl bg-white shadow-xl">
+                  <Link
+                    href={`/r/${roomCode}`}
+                    aria-label={`Open room ${roomCode}`}
+                    className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white shadow-xl transition-transform hover:scale-[1.02]"
+                  >
                     <img src={qrCodeUrl} alt="Room QR" className="w-48 h-48" />
-                  </div>
+                    <span className="text-[11px] font-bold text-primary">
+                      Tap to open room
+                    </span>
+                  </Link>
                 )}
                 <div className="flex gap-2 w-full max-w-xs">
                   <a

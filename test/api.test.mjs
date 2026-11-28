@@ -7,7 +7,7 @@ import test from "node:test";
 test(
   "all backend contracts against a fresh disposable PostgreSQL database",
   { skip: !process.env.VIBEWALL_TEST_DATABASE_URL },
-  async () => {
+  async (t) => {
     Object.assign(process.env, {
       DATABASE_URL: process.env.VIBEWALL_TEST_DATABASE_URL,
       APP_ORIGIN: "http://localhost:3000",
@@ -56,7 +56,7 @@ test(
           body: body ? JSON.stringify(body) : undefined,
         });
         const res = await handle(req, {
-          params: Promise.resolve({ path: path.split("/") }),
+          params: Promise.resolve({ path: new URL(req.url).pathname.slice("/api/".length).split("/") }),
         });
         const result = await res.json();
         assert.equal(
@@ -74,6 +74,27 @@ test(
         title: "Test",
       });
       const base = "rooms/" + room.code;
+      await t.test("public discovery searches active room names and codes", async () => {
+        const create = async (title) => (await api("POST", "rooms", { title })).room;
+        const campus = await create("University FEST 2026");
+        const art = await create("Little Art Festival");
+        const closed = await create("Closed Festival");
+        const expired = await create("Expired Festival");
+        await api("PATCH", "rooms/" + closed.code, { status: "closed" });
+        await sql`update wall.rooms set expires_at=now() where id=${expired.id}`;
+        const discover = async (q) => {
+          const query = q === undefined ? "" : "?" + new URLSearchParams({ q });
+          return (await api("GET", "rooms" + query, null, null)).rooms;
+        };
+        const codes = (matches) => matches.map(({ code }) => code).sort();
+        assert.deepEqual(codes(await discover()), [room.code, campus.code, art.code].sort());
+        assert.deepEqual(codes(await discover("  fEsT  ")), [campus.code, art.code].sort());
+        assert.equal((await discover(campus.code.toLowerCase()))[0].id, campus.id);
+        assert.deepEqual(await discover("no such event"), []);
+        assert.deepEqual(await discover("%_"), []);
+        assert.deepEqual(Object.keys((await discover("Little Art Festival"))[0]).sort(),
+          ["code", "expires_at", "id", "status", "theme", "title"]);
+      });
       await api("GET", base, null, null);
       await api("GET", base + "/feed", null, ids[1], 403);
       for (const id of ids.slice(1)) await api("POST", base + "/join", {}, id);

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { roomQrDataUrl } from "@/lib/room-qr";
 import { ScreenResponse, RoomDTO } from "@/types/vibewall";
 import { api } from "@/lib/api";
@@ -329,9 +330,13 @@ export default function VenueDisplayPage() {
               </div>
 
               {qrCodeDataUrl && (
-                <div className="p-2.5 rounded-2xl bg-white shadow-xl shrink-0">
+                <Link
+                  href={`/r/${screenData.room.code}`}
+                  aria-label={`Open room ${screenData.room.code}`}
+                  className="p-2.5 rounded-2xl bg-white shadow-xl shrink-0 transition-transform hover:scale-105"
+                >
                   <img src={qrCodeDataUrl} alt="Room QR" className="w-28 h-28 lg:w-32 lg:h-32" />
-                </div>
+                </Link>
               )}
             </div>
 
