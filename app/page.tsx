@@ -153,13 +153,6 @@ export default function LandingHostPortal() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <Link
-                    href="/signin"
-                    className="hidden text-xs font-bold text-on-surface-variant hover:text-primary sm:inline"
-                  >
-                    Sign In
-                  </Link>
                 <button
                   onClick={handleAuth}
                   disabled={!authReady || authBusy}
@@ -168,7 +161,6 @@ export default function LandingHostPortal() {
                   <Icon name="login" size={15} />
                   <span>Continue with Google</span>
                 </button>
-                </div>
               )}
             </div>
           </div>

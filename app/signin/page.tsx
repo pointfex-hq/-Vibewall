@@ -9,7 +9,7 @@ export const metadata = {
 export default function SignInPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#FFF8F5]" />}>
-      <AuthScreen variant="signin" />
+      <AuthScreen />
     </Suspense>
   );
 }
