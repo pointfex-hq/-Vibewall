@@ -11,8 +11,6 @@ import {
   RoomPreviewResponse,
   ScreenResponse,
   SignResponse,
-  StoryDTO,
-  StoryEntryDTO,
   ThemeKey,
   UpdateRoomResponse,
 } from "@/types/vibewall";
@@ -318,34 +316,6 @@ export const api = {
     });
   },
 
-  // 9. POST /api/rooms/[code]/stories
-  async createStory(code: string, prompt: string): Promise<{ story: StoryDTO }> {
-    if (USE_MOCK) {
-      const story = mockDB.createStory(code, prompt);
-      return { story };
-    }
-    return request<{ story: StoryDTO }>(`/api/rooms/${code}/stories`, {
-      method: "POST",
-      body: JSON.stringify({ prompt }),
-    });
-  },
-
-  // 10. POST /api/stories/[storyId]/entries
-  async addStoryEntry(
-    storyId: string,
-    data: { image_url: string; cloudinary_public_id: string; author_name?: string }
-  ): Promise<{ entry: StoryEntryDTO }> {
-    if (USE_MOCK) {
-      const entry = mockDB.addStoryEntry(storyId, data.image_url, data.author_name);
-      if (!entry) throw new Error("Story entry could not be added");
-      return { entry };
-    }
-    return request<{ entry: StoryEntryDTO }>(`/api/stories/${storyId}/entries`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
   // 11. POST /api/rooms/[code]/polls
   async createPoll(
     code: string,
@@ -392,7 +362,7 @@ export const api = {
 
   // 14. POST /api/reports
   async reportContent(
-    targetType: "post" | "note" | "story_entry",
+    targetType: "post" | "note",
     targetId: string
   ): Promise<{ reported: boolean; auto_hidden: boolean }> {
     if (USE_MOCK) {

@@ -20,7 +20,6 @@ const ICON_MAP: Record<string, keyof typeof lucide> = {
   admin_panel_settings: "ShieldCheck",
   arrow_back: "ArrowLeft",
   arrow_forward: "ArrowRight",
-  auto_stories: "BookMarked",
   badge: "Badge",
   block: "Ban",
   bolt: "Zap",
